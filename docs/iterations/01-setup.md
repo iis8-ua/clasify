@@ -222,4 +222,12 @@ Correcciones de estilo hechas sobre lo generado:
 
 ## COMMITS RELACIONADOS
 
-- Pendiente. Se rellenará con los hashes después de crear los commits de la iteración (los hashes se añaden en un commit posterior de documentación; no es necesario registrar el hash de ese último commit).
+- `9c02192` - `tarea(config): elimina los ficheros basura de macOS` (limpieza del repositorio, previa a la iteración)
+- `0884172` - `tarea(config): inicializa el proyecto Node e instala dependencias`
+- `92341d8` - `tarea(schema): crea el esquema y los datos iniciales`
+- `6390ac2` - `añadir(auth): registro, login y middleware de tokens JWT`
+- `bacaebd` - `probar(auth): añade los tests de autenticación`
+- `f4a450d` - `documentar(docs): actualiza los resultados de I1`
+
+Los pasos 1 a 3 del PLAN (repositorio git, `.gitignore` y estructura de carpetas) ya estaban
+hechos en `9c02192` y en el commit inicial `302aad0`, antes de abrir la rama de la iteración.
