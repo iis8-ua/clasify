@@ -43,7 +43,19 @@ Técnicos:
 
 ### Ajustes durante la iteración
 
-- (Vacío si no ha habido cambios)
+- Se añade **`dotenv`** como dependencia, que no estaba en la lista del PLAN, para cargar
+  `backend/.env`.
+- Se instala **Express 5** en lugar de Express 4. En Express 5 los handlers `async` propagan solos
+  sus errores al manejador central, así que no hacen falta funciones envolventes.
+- Se añade el script **`db:create-databases`**, además de `db:schema` y `db:seed`, porque crear las
+  bases de datos la primera vez necesita un usuario con permiso `CREATE`.
+- Se añaden dos endpoints que no estaban en la tabla de `ARCHITECTURE.md`: `GET /clasify_api/salud`
+  (comprobar que el servidor responde) y `GET /clasify_api/auth/yo` (endpoint protegido del paso 11
+  del PLAN). Se han documentado ya en `ARCHITECTURE.md`.
+- `GET /clasify_api/auth/yo` devuelve el email del propio usuario, igual que hará `/usuarios/me` en
+  la I2. `/usuarios/me` sigue deliberadamente fuera de alcance en esta iteración.
+- Las respuestas correctas que no son un listado se envuelven en `datos`, igual que los listados
+  paginados pero sin `paginacion`, para no mantener dos convenciones.
 
 ## PLAN
 
@@ -63,32 +75,56 @@ Técnicos:
 
 ### Revisión del estudiante
 
-Pendiente de completar tras implementar.
+Qué hay que mirar de esta iteración:
+
+- [ ] `src/services/authService.js`: el hash se genera con `bcrypt` y coste 12, y el login no
+      distingue entre "email no existe" y "contraseña incorrecta" a propósito, para no revelar qué
+      emails están registrados.
+- [ ] `src/middleware/auth.js`: comprueba el esquema `Bearer` y distingue token inválido de
+      caducado.
+- [ ] `src/middleware/validar.js`: la contraseña mínima son 8 caracteres. Es una decisión propia,
+      no venía especificada.
+- [ ] `src/db/schema.sql`: cada `CREATE TABLE` es `IF NOT EXISTS` y el seed usa `INSERT IGNORE`, por
+      eso ambos scripts se pueden repetir sin romper nada.
+- [ ] `src/app.js`: las rutas se montan bajo `/clasify_api` y las imágenes se sirven en
+      `/clasify_api/uploads`.
+- [ ] `tests/ayudaBaseDeDatos.js`: los `TRUNCATE` usan **una conexión dedicada** del pool. Si se
+      hicieran con `pool.execute` uno a uno, el `SET FOREIGN_KEY_CHECKS` se aplicaría a una sesión
+      distinta de la del `TRUNCATE` y no serviría de nada.
+
+Decisiones que tomó el estudiante y conviene que se lean antes de dar la iteración por buena: el
+seed se dejó con los usuarios de prueba y `GET /auth/yo` devuelve el email (ver `AI_LOG`).
 
 ### Riesgos o dudas
 
-- Confirmar la versión de MySQL disponible en el entorno de desarrollo.
-- Decidir si el seed de usuarios de prueba se ejecuta desde el script de esquema o desde un script aparte.
+- **Versión de MySQL**: resuelta. MySQL 8.0.46 en el entorno de desarrollo, confirmado al empezar.
+- **Seed en el script de esquema o aparte**: resuelta. Va aparte, en `src/db/seed.sql`, para poder
+  recargar los datos sin recrear las tablas.
+- **Permisos de MySQL**: crear las bases requiere un usuario con permiso `CREATE`. Una vez creadas
+  con `db:create-databases`, el usuario de la aplicación solo necesita permisos sobre `clasify` y
+  `clasify_test`.
 
 ## TEST_PLAN
 
 ### Pruebas manuales
 
+Probadas el 29/09/2026 con el servidor arrancado (`npm start`, MySQL 8.0.46) y peticiones `curl`.
+
 | Caso | Resultado esperado | Resultado obtenido |
 |---|---|---|
-| El servidor arranca con la base de datos disponible | Arranca sin errores y responde | |
-| El repositorio git está inicializado en `P1/` | `git status` funciona y hay historial de commits | |
-| `.gitignore` excluye `node_modules/`, `.env` y subidas | No aparecen en `git status` | |
-| La carpeta `backend/uploads/` se conserva en el repo | El `.gitkeep` está versionado | |
-| El script de esquema se ejecuta dos veces | La segunda ejecución no falla | |
-| Registro con email, nombre y contraseña válidos | Devuelve 201 y el usuario creado | |
-| Registro con email ya existente | Devuelve 409 con mensaje de error | |
-| Registro con email inválido o contraseña corta | Devuelve 400 con el campo señalado | |
-| Login con credenciales correctas | Devuelve 200 y un token JWT | |
-| Login con contraseña incorrecta | Devuelve 401 con mensaje de error | |
-| Petición protegida con token válido | Devuelve 200 | |
-| Petición protegida sin token | Devuelve 401 | |
-| Petición protegida con token inválido o caducado | Devuelve 401 | |
+| El servidor arranca con la base de datos disponible | Arranca sin errores y responde | Correcto. Log: "Conectado a la base de datos clasify" y `GET /clasify_api/salud` → 200 `{"datos":{"estado":"ok"}}` |
+| El repositorio git está inicializado en `P1/` | `git status` funciona y hay historial de commits | Correcto. 10 commits, repositorio enlazado con `origin` |
+| `.gitignore` excluye `node_modules/`, `.env` y subidas | No aparecen en `git status` | Correcto. `git check-ignore` confirma `.env`, `node_modules/` y `backend/uploads/*` |
+| La carpeta `backend/uploads/` se conserva en el repo | El `.gitkeep` está versionado | Correcto. `backend/uploads/.gitkeep` versionado |
+| El script de esquema se ejecuta dos veces | La segunda ejecución no falla | Correcto. Ejecutado dos veces, aparecen las 6 tablas y no hay error |
+| Registro con email, nombre y contraseña válidos | Devuelve 201 y el usuario creado | Correcto. 201 con `token` y `usuario` |
+| Registro con email ya existente | Devuelve 409 con mensaje de error | Correcto. 409 `EMAIL_DUPLICADO`, `campo: "email"` |
+| Registro con email inválido o contraseña corta | Devuelve 400 con el campo señalado | Correcto. 400 `VALIDACION` con `campo: "email"` y con `campo: "password"` |
+| Login con credenciales correctas | Devuelve 200 y un token JWT | Correcto. 200 con token; verificado también con el usuario del seed |
+| Login con contraseña incorrecta | Devuelve 401 con mensaje de error | Correcto. 401 `CREDENCIALES_INVALIDAS` |
+| Petición protegida con token válido | Devuelve 200 | Correcto. `GET /clasify_api/auth/yo` → 200 con los datos del usuario |
+| Petición protegida sin token | Devuelve 401 | Correcto. 401 `SIN_TOKEN` |
+| Petición protegida con token inválido o caducado | Devuelve 401 | Correcto. Token falso → 401 `TOKEN_INVALIDO`; token firmado con `expiresIn: -10` → 401 `TOKEN_CADUCADO` |
 
 ### Tests automáticos
 
@@ -98,34 +134,100 @@ Con **Jest + Supertest** contra la API (base de datos de pruebas `clasify_test`)
   login correcto (200 + token), login incorrecto (401) y petición protegida sin token o con token
   inválido (401).
 
+Resultado obtenido el 29/09/2026 con `npm test`: **15 pruebas, 15 correctas, 0 fallidas**, en 9,8 s.
+Cobertura: 86,4 % de sentencias, 66,7 % de ramas, 88,9 % de funciones. Los ficheros peor cubiertos
+son `middleware/errores.js` (45 %) y `ApiError.js` (86 %), porque los caminos internos de error no
+se comprueban en la I1.
+
 ## AI_LOG
 
 ### Herramienta usada
 
 - Herramienta: OpenCode
-- Modelo: (por completar)
-- Tipo: (por completar)
+- Modelo: big-pickle
+- Tipo: generación y revisión de código, con las decisiones de diseño y de alcance tomadas por el
+  estudiante
 
 ### Uso realizado
 
-Pendiente de completar durante la iteración.
+La IA se usó por partes, no de una sola vez:
+
+1. **Generación del código** de los 13 pasos del PLAN: `package.json` y scripts, `config.js`, pool
+   de `mysql2`, `schema.sql`, `seed.sql`, `authService`, rutas de autenticación, middleware de
+   tokens, validadores y los 15 tests.
+2. **Revisión y depuración** durante la implementación. La IA localizó y corrigió cuatro fallos
+   propios antes de dar la iteración por buena (ver *Correcciones manuales*).
+3. **Documentación**: ayuda para redactar los ajustes de esta SPEC, la tabla de endpoints de
+   `ARCHITECTURE.md`, el formato de respuesta y los códigos de error.
+
+Lo que **no** hizo la IA: decidir el modelo de datos (ya estaba en `ARCHITECTURE.md` de la
+iteración 0), crear el usuario y las bases de datos en MySQL, ni elegir el alcance de la iteración.
 
 ### Prompt importante 1
 
-Pendiente de completar.
+> "haz al I1, ves diciéndome cuando sea necesario poner algo en un documento y cuando vayas a hacer un
+> commit para revisar"
+
+Este prompt marca el ritmo de la iteración: la IA debía avisar antes de tocar la documentación y
+antes de cada commit, y no decidir sola ni el contenido de los documentos ni lo que se commitea.
 
 ### Resultado
 
-Pendiente de completar.
+- 4 commits de código y configuración, 0 de documentación en el mismo commit.
+- `npm test`: 15/15 correctas, 86,4 % de cobertura de sentencias.
+- Los 14 casos del `TEST_PLAN` verificados sobre el servidor real, no solo con tests.
+- 4 bugs encontrados y corregidos por la propia IA durante la iteración (ver abajo).
+- Un contratiempo que no resolvió la IA: la creación del usuario de MySQL, que tuvo que hacer el
+  estudiante a mano.
 
 ### Decisión del estudiante
 
-Pendiente de completar: qué se aceptó y qué se rechazó de lo propuesto por la IA.
+Lo que se aceptó de lo propuesto por la IA:
+
+- **El seed va en un script aparte** (`seed.sql`), no dentro de `schema.sql`.
+- **Añadir `dotenv`** como dependencia, en vez de usar el cargador de `.env` nativo de Node, para no
+  apartarse de la lista de dependencias del PLAN.
+- **Mantener los dos usuarios de prueba en `seed.sql`**, aunque el hash bcrypt de `Clasify123!`
+  quede versionado. Es cómodo para probar el login a mano y la base es local.
+- **`GET /clasify_api/auth/yo` devuelve el email** del propio usuario, igual que hará `/usuarios/me`
+  en la I2.
+
+Lo que se cambió o rechazó:
+
+- La contraseña de `DB_PASSWORD` se fijó a `Clasify123!` para coincidir con el usuario de MySQL que
+  creó el estudiante, en vez de la aleatoria que proponía la IA. Consecuencia asumida: `DB_PASSWORD`
+  y `SEED_PASSWORD` son la misma cadena. No afecta a la entrega porque `.env` no se versiona, pero
+  conviene separarlas antes de desplegar.
 
 ### Correcciones manuales
 
-Pendiente de completar.
+Fallos encontrados y corregidos durante la implementación:
+
+1. `app.js` se creó en una ruta con un error tipográfico (`4Carreria` en vez de `4Carrera`) y quedó
+   fuera del repositorio. Los tests lo detectaron con `Cannot find module '../src/app'`.
+2. `limpiarTablas()` ejecutaba `SET FOREIGN_KEY_CHECKS = 0` y los `TRUNCATE` con `pool.execute`, que
+   toma conexiones distintas del pool. La instrucción de sesión no llegaba a la sesión del `TRUNCATE` y los
+   tests fallaban con `Duplicate entry`. Corregido usando una conexión dedicada.
+3. Se llamaba a `ApiError.noAutorado` cuando el método se llama `noAutorizado`. El `undefined`
+   reventaba con 500 en vez de 401 en el login fallido. Lo detectaron los tests de login incorrecto.
+4. Faltaba el script `db:create-databases` en `package.json`, así que `npm run` no lo encontraba.
+
+Correcciones de estilo hechas sobre lo generado:
+
+- Se unificó el mensaje del 404 a "No existe la ruta ..." (decía "no encontrado" y sonaba mal).
+- Se añadió `servidor.closeIdleConnections()` al apagado, porque con conexiones *keep-alive* el
+  servidor tardaba varios segundos en cerrar tras un SIGTERM.
+- Se puso `quiet: true` en `dotenv.config()` para que no imprimiese su banner en la salida de los
+  tests.
 
 ## COMMITS RELACIONADOS
 
-- Pendiente. Se rellenará con los hashes después de crear los commits de la iteración (los hashes se añaden en un commit posterior de documentación; no es necesario registrar el hash de ese último commit).
+- `9c02192` - `tarea(config): elimina los ficheros basura de macOS` (limpieza del repositorio, previa a la iteración)
+- `0884172` - `tarea(config): inicializa el proyecto Node e instala dependencias`
+- `92341d8` - `tarea(schema): crea el esquema y los datos iniciales`
+- `6390ac2` - `añadir(auth): registro, login y middleware de tokens JWT`
+- `bacaebd` - `probar(auth): añade los tests de autenticación`
+- `f4a450d` - `documentar(docs): actualiza los resultados de I1`
+
+Los pasos 1 a 3 del PLAN (repositorio git, `.gitignore` y estructura de carpetas) ya estaban
+hechos en `9c02192` y en el commit inicial `302aad0`, antes de abrir la rama de la iteración.

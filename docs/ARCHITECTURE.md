@@ -106,8 +106,10 @@ petición requiere un token válido.
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
+| GET | `/salud` | - | Comprobación de que el servidor responde |
 | POST | `/auth/register` | - | Alta de usuario (email, nombre, contraseña). 201 + token |
 | POST | `/auth/login` | - | Devuelve 200 + token JWT |
+| GET | `/auth/yo` | JWT | Usuario del token. Sirve para comprobar que el middleware acepta un token válido |
 | GET | `/usuarios/me` | JWT | Perfil propio (incluye email) |
 | PATCH | `/usuarios/me` | JWT | Editar nombre / biografía / contraseña |
 | GET | `/usuarios/:id` | - | Perfil público (sin email) |
@@ -146,6 +148,62 @@ Los listados aceptan `pagina` (>= 1, por defecto 1) y `limite` (1–100, por def
 ```json
 { "error": { "codigo": "EMAIL_DUPLICADO", "mensaje": "...", "campo": "email" } }
 ```
+
+### Formato de respuesta
+
+Las respuestas correctas que no son un listado van envueltas en `datos`, igual que los listados
+paginados pero sin el objeto `paginacion`, para no tener dos convenciones distintas:
+
+```json
+{ "datos": { "token": "...", "usuario": { "id": 1, "nombre": "...", "email": "..." } } }
+```
+
+### Códigos de error en uso
+
+| Código | Estado HTTP | Cuándo se devuelve |
+|---|---|---|
+| `VALIDACION` | 400 | Faltan campos o no cumplen el formato (se indica `campo`) |
+| `JSON_INVALIDO` | 400 | El cuerpo de la petición no es JSON válido |
+| `SIN_TOKEN` | 401 | Falta la cabecera `Authorization` o el token |
+| `ESQUEMA_INVALIDO` | 401 | La cabecera no usa el esquema `Bearer` |
+| `TOKEN_INVALIDO` | 401 | El token no verifica la firma |
+| `TOKEN_CADUCADO` | 401 | El token ha pasado su fecha de expiración |
+| `CREDENCIALES_INVALIDAS` | 401 | Email o contraseña incorrectos (mismo mensaje en ambos casos, para no revelar qué emails existen) |
+| `SIN_PERMISOS` | 403 | El usuario no es el propietario del recurso |
+| `NO_ENCONTRADO` | 404 | El recurso o la ruta no existen |
+| `EMAIL_DUPLICADO` | 409 | Ya existe un usuario con ese email |
+| `CUERPO_DEMASIADO_GRANDE` | 413 | El cuerpo supera el límite de 1 MB |
+| `ERROR_INTERNO` | 500 | Fallo no controlado; el detalle solo se escribe en el log del servidor |
+
+### Variables de entorno
+
+Se leen de `backend/.env` con `dotenv`. `backend/.env.example` documenta todas y no se versiona
+el `.env` real.
+
+| Variable | Para qué sirve |
+|---|---|
+| `PORT` | Puerto del servidor (3000 por defecto) |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` | Conexión con MySQL |
+| `DB_NAME` | Base de datos de desarrollo (`clasify`) |
+| `DB_TEST_NAME` | Base de datos de los tests (`clasify_test`) |
+| `DB_POOL_SIZE` | Conexiones máximas del pool (10 por defecto) |
+| `JWT_SECRET` | Secreto de firma de los tokens (HS256). Si falta, el backend no arranca |
+| `JWT_EXPIRES_IN` | Caducidad de los tokens (7d por defecto) |
+
+### Scripts de npm
+
+| Script | Qué hace |
+|---|---|
+| `npm start` | Arranca el servidor |
+| `npm run dev` | Arranca con recarga automática (`node --watch`) |
+| `npm test` | Lanza Jest contra `clasify_test` |
+| `npm run db:create-databases` | Crea `clasify` y `clasify_test` si no existen |
+| `npm run db:schema` | Ejecuta `src/db/schema.sql` (idempotente) |
+| `npm run db:seed` | Ejecuta `src/db/seed.sql` (idempotente) |
+
+Orden de puesta en marcha desde cero: `db:create-databases` → `db:schema` → `db:seed` → `start`.
+El usuario de MySQL necesita permiso `CREATE` para el primer paso; después bastan permisos sobre
+las dos bases.
 
 ### Notas sobre permisos
 
