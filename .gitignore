@@ -17,6 +17,8 @@ coverage/
 
 # Sistema
 .DS_Store
+__MACOSX/
+._*
 
 # Enunciados en PDF: no se versionan
 *.pdf
