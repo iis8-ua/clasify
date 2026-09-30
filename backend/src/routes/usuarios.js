@@ -3,6 +3,7 @@
 const express = require('express');
 const { Router } = express;
 const usuarioService = require('../services/usuarioService');
+const favoritoService = require('../services/favoritoService');
 const { autenticar } = require('../middleware/auth');
 const { leerPaginacion } = require('../helpers/paginacion');
 const { validarActualizacionPerfil, validarId } = require('../middleware/validar');
@@ -24,6 +25,10 @@ router.patch('/me', autenticar, async (req, res) => {
 router.get('/me/anuncios', autenticar, async (req, res) => {
   const usuario = await usuarioService.perfilPropio(req.usuario.id);
   res.status(200).json(await usuarioService.listarAnuncios(usuario.id, leerPaginacion(req.query)));
+});
+
+router.get('/me/favoritos', autenticar, async (req, res) => {
+  res.status(200).json(await favoritoService.listar(req.usuario.id, leerPaginacion(req.query)));
 });
 
 router.get('/:id/anuncios', async (req, res) => {

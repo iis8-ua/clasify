@@ -262,6 +262,29 @@ las dos bases.
 - `PATCH /usuarios/me` es un PATCH: solo se validan y se escriben los campos enviados, y los campos
   desconocidos se ignoran. El email no se puede cambiar (400 si viene en el cuerpo) y cambiar la
   contraseña exige enviar `password_actual`.
+- Los favoritos son siempre del usuario del token: no hay ruta para ver ni para tocar los de otro, y
+  el `DELETE` borra filtrando por `id_usuario`, así que conocer el id de un anuncio no da acceso a
+  la fila de otra persona. Marcar el propio anuncio se rechaza con 400 `VALIDACION` y
+  `campo: "anuncio"`, en el mismo orden de comprobaciones que el resto (existe, luego es propio).
+
+### Decisiones de la I4 (favoritos)
+
+- **Las rutas están repartidas por el recurso al que cuelgan**, no en un `routes/favoritos.js`:
+  `POST`/`DELETE /anuncios/:id/favorito` en `routes/anuncios.js` y `GET /usuarios/me/favoritos` en
+  `routes/usuarios.js`. El esquema está en `ARCHITECTURE.md`, pero el fichero que sirve cada URL es
+  el del recurso del que cuelga.
+- **El alta es idempotente con 201 y 200**, y ambos devuelven el mismo cuerpo
+  (`datos.favorito`). El 201 significa "guardado ahora" y el 200 "ya estaba guardado"; en el 200 la
+  fecha es la original, no se toca. La idempotencia la impone la restricción `UNIQUE` del esquema
+  con un `INSERT IGNORE`, y el código se decide leyendo `affectedRows`, no preguntando antes con un
+  `SELECT` (eso dejaría una carrera entre dos peticiones a la vez).
+- **Quitar un favorito que no está devuelve 404**, no 204. Es lo que fija la SPEC de la I4 y es
+  deliberado, aunque lo idiomático en un `DELETE` sea devolver 204 siempre.
+- **El listado devuelve el mismo resumen ligero que los demás listados de anuncios**, con los
+  anuncios vendidos dentro (que un favorito esté vendido es información, no un error) y ordenado
+  por `favoritos.fecha` descendente con `favoritos.id` de desempate. Al ser un recurso secundario
+  no se le añade `num_favoritos` por fila ni filtros propios: el frontend tiene un solo caso que
+  aprender y el detalle ya trae el contador.
 
 ## Segundo backend (Supabase)
 

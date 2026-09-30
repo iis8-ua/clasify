@@ -6,10 +6,8 @@ const { consultar, ejecutar } = require('../db/pool');
 const { ApiError } = require('../errors/ApiError');
 const { leerPaginacion, respuestaPaginada, totalDe } = require('../helpers/paginacion');
 const { CAMPOS_PUBLICOS } = require('./usuarioService');
-const { CARPETA } = require('../middleware/subidaImagen');
-
-const CAMPOS_LISTADO =
-  'a.id, a.titulo, a.precio, a.estado, a.imagen, a.fecha_creacion, a.id_categoria';
+const { CAMPOS_LISTADO_ANUNCIO_ALIAS } = require('../helpers/proyecciones');
+const { uploads } = require('../config');
 
 /**
  * Proyección del autor para el detalle. Se deriva de `CAMPOS_PUBLICOS` de
@@ -108,7 +106,7 @@ async function listar(filtros = {}, paginacion) {
 
   const [filas, conteo] = await Promise.all([
     consultar(
-      `SELECT ${CAMPOS_LISTADO} FROM anuncios a ${where} ORDER BY ${orden} LIMIT ? OFFSET ?`,
+      `SELECT ${CAMPOS_LISTADO_ANUNCIO_ALIAS} FROM anuncios a ${where} ORDER BY ${orden} LIMIT ? OFFSET ?`,
       [...valores, limite, offset]
     ),
     consultar(`SELECT COUNT(*) AS total FROM anuncios a ${where}`, valores)
@@ -250,7 +248,7 @@ async function eliminar(id, idUsuario) {
  */
 async function borrarFichero(nombre) {
   try {
-    await fs.unlink(path.join(CARPETA, path.basename(nombre)));
+    await fs.unlink(path.join(uploads.carpeta, path.basename(nombre)));
   } catch (error) {
     if (error.code !== 'ENOENT') {
       throw error;
