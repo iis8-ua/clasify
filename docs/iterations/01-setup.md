@@ -240,15 +240,20 @@ seed se dejó con los usuarios de prueba y `GET /auth/yo` devuelve el email (ver
 
 ### Pendiente para la I2
 
-Cosas que han salido al revisar la I1 y que no se han tocado en esta iteración:
+Cosas que han salido al revisar la I1. **Los tres primeros puntos se han resuelto en la I2**, en el
+commit `1098d1e` y en `c885e48`; el cuarto no hacía falta tocar nada.
 
-- `src/routes/auth.js` devuelve `USUARIO_NO_EXISTE` con `res.json` en vez de `ApiError`, y ese
-  código no está en la tabla de errores de `ARCHITECTURE.md`.
-- `src/services/authService.js` no llama a `bcrypt.compare` cuando el email no existe. El mensaje
+- ~~`src/routes/auth.js` devuelve `USUARIO_NO_EXISTE` con `res.json` en vez de `ApiError`, y ese
+  código no está en la tabla de errores de `ARCHITECTURE.md`.~~ **Resuelto en la I2**: ahora se lanza
+  `ApiError` y el código está en la tabla de `ARCHITECTURE.md`.
+- ~~`src/services/authService.js` no llama a `bcrypt.compare` cuando el email no existe. El mensaje
   es el mismo en los dos casos, pero el tiempo de respuesta no, así que en teoría se puede deducir
-  qué emails están registrados. Se arregla comparando con un hash señuelo.
-- No hay test automático de `TOKEN_CADUCADO`, solo la prueba manual de la tabla de arriba.
-- La estructura de carpetas de la SPEC no menciona `src/errors/`.
+  qué emails están registrados.~~ **Resuelto en la I2**: se compara siempre, contra un hash señuelo
+  si el usuario no existe.
+- ~~No hay test automático de `TOKEN_CADUCADO`, solo la prueba manual de la tabla de arriba.~~
+  **Resuelto en la I2**: está en `auth.test.js`.
+- La estructura de carpetas de la SPEC no menciona `src/errors/`. No es un problema: la carpeta
+  existe y se usa, solo es que la SPEC no la recogía.
 
 ## TEST_PLAN
 
