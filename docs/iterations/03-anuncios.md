@@ -432,4 +432,8 @@ Lo que se cambió o rechazó de lo generado:
 
 ## COMMITS RELACIONADOS
 
-- Pendiente. Se rellenará con los hashes después de crear los commits de la iteración.
+- `2bea538` - `añadir(anuncios): endpoint de categorías para el filtro del listado`
+- `f9a1088` - `añadir(anuncios): CRUD con búsqueda, filtros, estado e imagen`
+- `20e8115` - `probar(anuncios): 84 tests del CRUD, la imagen y los filtros`
+- `637c041` - `corregir(docs): corrige cinco datos falsos del documento de I2`
+- `f7301df` - `documentar(docs): actualiza los resultados de I3`
