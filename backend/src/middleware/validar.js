@@ -1,6 +1,12 @@
 'use strict';
 
 const { ApiError } = require('../errors/ApiError');
+const {
+  ORDENES_PERMITIDOS,
+  ORDEN_POR_DEFECTO,
+  ESTADOS_LISTADO,
+  ESTADO_POR_DEFECTO
+} = require('../services/anuncioService');
 
 const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const LONGITUD_MINIMA_CONTRASENA = 8;
@@ -133,9 +139,185 @@ function validarId(valor) {
   return id;
 }
 
+/* ------------------------------------------------------------------ */
+/* Anuncios                                                            */
+/* ------------------------------------------------------------------ */
+
+const LONGITUD_MAXIMA_TITULO = 150;
+const LONGITUD_MAXIMA_DESCRIPCION = 5000;
+const LONGITUD_MAXIMA_BUSQUEDA = 150;
+const PRECIO_MAXIMO = 99999999.99;
+
+// Precio no negativo con hasta 2 decimales, que es lo que cabe en DECIMAL(10,2).
+// Se rechaza lo que no encaja en lugar de dejar que MySQL redondee en silencio.
+const FORMATO_PRECIO = /^\d{1,8}(\.\d{1,2})?$/;
+
+const ESTADOS = ['disponible', 'vendido'];
+
+/**
+ * Acepta el precio como número (JSON) o como texto (multipart, donde todo llega
+ * en cadena) y lo devuelve con dos decimales, como lo guarda la columna.
+ */
+function validarPrecio(valor) {
+  const cadena =
+    typeof valor === 'number' ? String(valor) : typeof valor === 'string' ? valor.trim() : '';
+
+  if (!FORMATO_PRECIO.test(cadena)) {
+    throw ApiError.validacion(
+      'El precio debe ser un número no negativo con como mucho 2 decimales',
+      'precio'
+    );
+  }
+
+  const precio = Number(cadena);
+  if (precio > PRECIO_MAXIMO) {
+    throw ApiError.validacion(`El precio no puede superar los ${PRECIO_MAXIMO}`, 'precio');
+  }
+
+  return precio.toFixed(2);
+}
+
+function validarTitulo(valor) {
+  const titulo = texto(valor);
+  if (titulo === '') {
+    throw ApiError.validacion('El título es obligatorio', 'titulo');
+  }
+  if (titulo.length > LONGITUD_MAXIMA_TITULO) {
+    throw ApiError.validacion(
+      `El título no puede superar los ${LONGITUD_MAXIMA_TITULO} caracteres`,
+      'titulo'
+    );
+  }
+  return titulo;
+}
+
+function validarDescripcion(valor) {
+  if (typeof valor !== 'string') {
+    throw ApiError.validacion('La descripción es obligatoria', 'descripcion');
+  }
+  const descripcion = valor.trim();
+  if (descripcion === '') {
+    throw ApiError.validacion('La descripción es obligatoria', 'descripcion');
+  }
+  if (descripcion.length > LONGITUD_MAXIMA_DESCRIPCION) {
+    throw ApiError.validacion(
+      `La descripción no puede superar los ${LONGITUD_MAXIMA_DESCRIPCION} caracteres`,
+      'descripcion'
+    );
+  }
+  return descripcion;
+}
+
+/** Igual que `validarId`, pero el campo del error se llama `categoria`. */
+function validarCategoria(valor) {
+  if (valor === undefined || valor === '') {
+    throw ApiError.validacion('La categoría es obligatoria', 'categoria');
+  }
+  const id = Number(valor);
+  if (!Number.isInteger(id) || id < 1) {
+    throw ApiError.validacion('La categoría no es válida', 'categoria');
+  }
+  return id;
+}
+
+/** Cuerpo de `POST /anuncios`. La imagen es opcional y la añade el middleware de subida. */
+function validarNuevoAnuncio(cuerpo) {
+  const anuncio = {
+    titulo: validarTitulo(cuerpo.titulo),
+    descripcion: validarDescripcion(cuerpo.descripcion),
+    precio: validarPrecio(cuerpo.precio),
+    idCategoria: validarCategoria(cuerpo.categoria)
+  };
+  return anuncio;
+}
+
+/**
+ * Cuerpo de `PATCH /anuncios/:id`: solo se comprueban los campos enviados.
+ * `hayImagen` va aparte porque la imagen no llega en el cuerpo sino en `req.file`.
+ */
+function validarActualizacionAnuncio(cuerpo, { hayImagen = false } = {}) {
+  const cambios = {};
+
+  if (cuerpo.titulo !== undefined) {
+    cambios.titulo = validarTitulo(cuerpo.titulo);
+  }
+  if (cuerpo.descripcion !== undefined) {
+    cambios.descripcion = validarDescripcion(cuerpo.descripcion);
+  }
+  if (cuerpo.precio !== undefined) {
+    cambios.precio = validarPrecio(cuerpo.precio);
+  }
+  if (cuerpo.categoria !== undefined) {
+    cambios.idCategoria = validarCategoria(cuerpo.categoria);
+  }
+
+  if (Object.keys(cambios).length === 0 && !hayImagen) {
+    throw ApiError.validacion('No hay ningún campo editable en el cuerpo de la petición');
+  }
+
+  return cambios;
+}
+
+/** Cuerpo de `PATCH /anuncios/:id/estado`. */
+function validarCambioEstado(cuerpo) {
+  const estado = typeof cuerpo.estado === 'string' ? cuerpo.estado.trim() : '';
+  if (!ESTADOS.includes(estado)) {
+    throw ApiError.validacion(
+      `El estado tiene que ser uno de estos: ${ESTADOS.join(', ')}`,
+      'estado'
+    );
+  }
+  return { estado };
+}
+
+/**
+ * Query de `GET /anuncios`. `texto` vacío se ignora (viene de un buscador) y
+ * `orden` y `estado` tienen valor por defecto.
+ *
+ * Los valores permitidos de `orden` y `estado` se importan del servicio para que
+ * la lista que se valida y la lista que se traduce a SQL no puedan divergir.
+ */
+function validarFiltrosAnuncios(query = {}) {
+  const busqueda = typeof query.texto === 'string' ? query.texto.trim() : '';
+  if (busqueda.length > LONGITUD_MAXIMA_BUSQUEDA) {
+    throw ApiError.validacion(
+      `La búsqueda no puede superar los ${LONGITUD_MAXIMA_BUSQUEDA} caracteres`,
+      'texto'
+    );
+  }
+
+  const orden = query.orden === undefined || query.orden === '' ? ORDEN_POR_DEFECTO : query.orden;
+  if (!ORDENES_PERMITIDOS.includes(orden)) {
+    throw ApiError.validacion(
+      `El orden tiene que ser uno de estos: ${ORDENES_PERMITIDOS.join(', ')}`,
+      'orden'
+    );
+  }
+
+  const estado = query.estado === undefined || query.estado === '' ? ESTADO_POR_DEFECTO : query.estado;
+  if (!ESTADOS_LISTADO.includes(estado)) {
+    throw ApiError.validacion(
+      `El estado tiene que ser uno de estos: ${ESTADOS_LISTADO.join(', ')}`,
+      'estado'
+    );
+  }
+
+  const filtros = { texto: busqueda === '' ? undefined : busqueda, orden, estado };
+
+  if (query.categoria !== undefined && query.categoria !== '') {
+    filtros.idCategoria = validarCategoria(query.categoria);
+  }
+
+  return filtros;
+}
+
 module.exports = {
   validarRegistro,
   validarLogin,
   validarActualizacionPerfil,
+  validarNuevoAnuncio,
+  validarActualizacionAnuncio,
+  validarCambioEstado,
+  validarFiltrosAnuncios,
   validarId
 };
