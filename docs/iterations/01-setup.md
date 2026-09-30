@@ -77,20 +77,154 @@ Técnicos:
 
 Qué hay que mirar de esta iteración:
 
-- [ ] `src/services/authService.js`: el hash se genera con `bcrypt` y coste 12, y el login no
+- [x] `src/services/authService.js`: el hash se genera con `bcrypt` y coste 12, y el login no
       distingue entre "email no existe" y "contraseña incorrecta" a propósito, para no revelar qué
       emails están registrados.
-- [ ] `src/middleware/auth.js`: comprueba el esquema `Bearer` y distingue token inválido de
+
+    El coste está en `COSTE_HASH = 12`, y `autenticar()` lanza siempre el mismo
+    `CREDENCIALES_INVALIDAS` llegue o no el email. Para comprobar que en la base de datos se guarda
+    el hash y no la contraseña:
+
+    ```bash
+    mysql -u clasify_app -p clasify -e "SELECT email, LEFT(password_hash,7) AS inicio, CHAR_LENGTH(password_hash) AS largo FROM usuarios;"
+    ```
+
+    ```text
+    +--------------------+---------+-------+
+    | email              | inicio  | largo |
+    +--------------------+---------+-------+
+    | ana@example.com    | $2b$12$ |    60 |
+    | carlos@example.com | $2b$12$ |    60 |
+    +--------------------+---------+-------+
+    ```
+
+    Los 60 caracteres son el formato de bcrypt (`$2b$` + coste + sal + hash), y tanto el prefijo
+    `$2b$12$` como el largo son los de un hash de coste 12: ninguna contraseña se guarda en claro.
+
+- [x] `src/middleware/auth.js`: comprueba el esquema `Bearer` y distingue token inválido de
       caducado.
-- [ ] `src/middleware/validar.js`: la contraseña mínima son 8 caracteres. Es una decisión propia,
+
+    Sin cabecera `Authorization`:
+
+    ```http
+    GET /clasify_api/auth/yo
+    ```
+
+    ```json
+    {
+        "error": {
+            "codigo": "SIN_TOKEN",
+            "mensaje": "Falta el token en la cabecera Authorization"
+        }
+    }
+    ```
+
+    Con un esquema que no es `Bearer`:
+
+    ```http
+    GET /clasify_api/auth/yo
+    Authorization: Basic dXNlcjpwYXNz
+    ```
+
+    ```json
+    {
+        "error": {
+            "codigo": "ESQUEMA_INVALIDO",
+            "mensaje": "El token debe enviarse como \"Authorization: Bearer <token>\""
+        }
+    }
+    ```
+
+    Con `Bearer`, pero un token que no verifica la firma:
+
+    ```http
+    GET /clasify_api/auth/yo
+    Authorization: Bearer token-que-no-es-valido
+    ```
+
+    ```json
+    {
+        "error": {
+            "codigo": "TOKEN_INVALIDO",
+            "mensaje": "El token no es válido"
+        }
+    }
+    ```
+
+    Y con un token bien firmado pero ya caducado (generado con `expiresIn: -10`):
+
+    ```json
+    {
+        "error": {
+            "codigo": "TOKEN_CADUCADO",
+            "mensaje": "El token ha caducado"
+        }
+    }
+    ```
+
+- [x] `src/middleware/validar.js`: la contraseña mínima son 8 caracteres. Es una decisión propia,
       no venía especificada.
-- [ ] `src/db/schema.sql`: cada `CREATE TABLE` es `IF NOT EXISTS` y el seed usa `INSERT IGNORE`, por
+
+    Con 7 caracteres, el 400:
+
+    ```http
+    POST /clasify_api/auth/register
+    Content-Type: application/json
+
+    { "email": "limite1@example.com", "nombre": "Límite", "password": "1234567" }
+    ```
+
+    ```json
+    {
+        "error": {
+            "codigo": "VALIDACION",
+            "mensaje": "La contraseña debe tener al menos 8 caracteres",
+            "campo": "password"
+        }
+    }
+    ```
+
+    Con 8 caracteres, el 201 esperado:
+
+    ```http
+    POST /clasify_api/auth/register
+    Content-Type: application/json
+
+    { "email": "limite2@example.com", "nombre": "Límite", "password": "12345678" }
+    ```
+
+    ```json
+    {
+        "datos": {
+            "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.<payload>.<firma>",
+            "usuario": {
+                "id": 6,
+                "email": "limite2@example.com",
+                "nombre": "Límite"
+            }
+        }
+    }
+    ```
+
+    El token va recortado: es una firma real de un servidor local y no dice nada más entero.
+
+- [x] `src/db/schema.sql`: cada `CREATE TABLE` es `IF NOT EXISTS` y el seed usa `INSERT IGNORE`, por
       eso ambos scripts se pueden repetir sin romper nada.
-- [ ] `src/app.js`: las rutas se montan bajo `/clasify_api` y las imágenes se sirven en
+
+    Ejecutados los dos scripts dos veces seguidas: las 6 tablas ya estaban y no saltó ningún error.
+
+- [x] `src/app.js`: las rutas se montan bajo `/clasify_api` y las imágenes se sirven en
       `/clasify_api/uploads`.
-- [ ] `tests/ayudaBaseDeDatos.js`: los `TRUNCATE` usan **una conexión dedicada** del pool. Si se
+
+    Todas las peticiones de esta iteración llevan el prefijo, y el `express.static` de la línea 13
+    es el que sirve `/clasify_api/uploads`.
+
+- [x] `tests/ayudaBaseDeDatos.js`: los `TRUNCATE` usan **una conexión dedicada** del pool. Si se
       hicieran con `pool.execute` uno a uno, el `SET FOREIGN_KEY_CHECKS` se aplicaría a una sesión
       distinta de la del `TRUNCATE` y no serviría de nada.
+
+    En `limpiarTablas()` se ve: `pool.getConnection()` para el `SET FOREIGN_KEY_CHECKS`, los
+    `TRUNCATE` y el `SET FOREIGN_KEY_CHECKS = 1`, y `release()` en el `finally`.
 
 Decisiones que tomó el estudiante y conviene que se lean antes de dar la iteración por buena: el
 seed se dejó con los usuarios de prueba y `GET /auth/yo` devuelve el email (ver `AI_LOG`).
@@ -103,6 +237,18 @@ seed se dejó con los usuarios de prueba y `GET /auth/yo` devuelve el email (ver
 - **Permisos de MySQL**: crear las bases requiere un usuario con permiso `CREATE`. Una vez creadas
   con `db:create-databases`, el usuario de la aplicación solo necesita permisos sobre `clasify` y
   `clasify_test`.
+
+### Pendiente para la I2
+
+Cosas que han salido al revisar la I1 y que no se han tocado en esta iteración:
+
+- `src/routes/auth.js` devuelve `USUARIO_NO_EXISTE` con `res.json` en vez de `ApiError`, y ese
+  código no está en la tabla de errores de `ARCHITECTURE.md`.
+- `src/services/authService.js` no llama a `bcrypt.compare` cuando el email no existe. El mensaje
+  es el mismo en los dos casos, pero el tiempo de respuesta no, así que en teoría se puede deducir
+  qué emails están registrados. Se arregla comparando con un hash señuelo.
+- No hay test automático de `TOKEN_CADUCADO`, solo la prueba manual de la tabla de arriba.
+- La estructura de carpetas de la SPEC no menciona `src/errors/`.
 
 ## TEST_PLAN
 
@@ -130,9 +276,15 @@ Probadas el 29/09/2026 con el servidor arrancado (`npm start`, MySQL 8.0.46) y p
 
 Con **Jest + Supertest** contra la API (base de datos de pruebas `clasify_test`):
 
-- `auth.test.js`: registro válido (201 + token), email duplicado (409), validaciones (400),
-  login correcto (200 + token), login incorrecto (401) y petición protegida sin token o con token
-  inválido (401).
+- `tests/auth.test.js`, 15 pruebas repartidas en cuatro bloques:
+  - `POST /clasify_api/auth/register` (7): registro válido (201 + token), el token recibido abre
+    una ruta protegida (200), email duplicado (409) y cuatro validaciones con `test.each` (400)
+    para email ausente, email inválido, nombre ausente y contraseña corta.
+  - `POST /clasify_api/auth/login` (3): credenciales correctas (200 + token), contraseña
+    incorrecta (401) y email inexistente (401).
+  - `Middleware de autenticación` (3): ruta protegida sin token (401), con token inválido (401) y
+    con un esquema distinto de `Bearer` (401).
+  - `Formato de respuesta` (2): ruta inexistente (404) y `/clasify_api/salud` (200).
 
 Resultado obtenido el 29/09/2026 con `npm test`: **15 pruebas, 15 correctas, 0 fallidas**, en 9,8 s.
 Cobertura: 86,4 % de sentencias, 66,7 % de ramas, 88,9 % de funciones. Los ficheros peor cubiertos
@@ -175,7 +327,7 @@ antes de cada commit, y no decidir sola ni el contenido de los documentos ni lo 
 
 - 4 commits de código y configuración, 0 de documentación en el mismo commit.
 - `npm test`: 15/15 correctas, 86,4 % de cobertura de sentencias.
-- Los 14 casos del `TEST_PLAN` verificados sobre el servidor real, no solo con tests.
+- Los 13 casos del `TEST_PLAN` verificados sobre el servidor real, no solo con tests.
 - 4 bugs encontrados y corregidos por la propia IA durante la iteración (ver abajo).
 - Un contratiempo que no resolvió la IA: la creación del usuario de MySQL, que tuvo que hacer el
   estudiante a mano.
