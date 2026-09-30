@@ -84,7 +84,7 @@ Qué hay que mirar de esta iteración:
     ```
 
     ```json
-    { "datos": { "usuario": { "id": 1, "email": "ana@example.com", "nombre": "Ana Ruiz" } } }
+    { "datos": { "usuario": { "id": 1, "email": "ana@example.com", "nombre": "Ana Editada" } } }
     ```
 
     Y sin token, que es el mismo `SIN_TOKEN` de siempre, así que no se cuela por ahí:
@@ -101,12 +101,12 @@ Qué hay que mirar de esta iteración:
     ```
 
     ```text
-    +----+--------------------+------------------+----------+-------------------------+
-    | id | email              | nombre           | biografia | fecha_alta              |
-    +----+--------------------+------------------+----------+-------------------------+
-    |  1 | ana@example.com    | Ana Editada      | Vendo ... | 2026-09-29 12:06:06     |
-    +----+--------------------+------------------+----------+-------------------------+
+    id  email             nombre        biografia                              fecha_alta
+    1   ana@example.com   Ana Editada   Vendo cosas que ya no uso. Perfil...   2026-09-29 12:06:06
     ```
+
+    (La tabla sale recortada por el terminal; `biografia` y `nombre` sí coinciden entero con lo que
+    devuelve la API.)
 
     ```http
     GET /clasify_api/usuarios/1
@@ -150,13 +150,33 @@ Qué hay que mirar de esta iteración:
 
     ```json
     {
-        "datos": [ { "id": 3, "titulo": "Mesa de madera" }, { "id": 2, "titulo": "Bicicleta de montaña" } ],
+        "datos": [
+            {
+                "id": 6,
+                "titulo": "Mesa de madera",
+                "precio": "45.00",
+                "estado": "disponible",
+                "imagen": null,
+                "fecha_creacion": "2026-09-30T11:37:17.000Z",
+                "id_categoria": 3
+            },
+            {
+                "id": 5,
+                "titulo": "Bicicleta de montaña",
+                "precio": "120.50",
+                "estado": "disponible",
+                "imagen": null,
+                "fecha_creacion": "2026-09-30T11:37:17.000Z",
+                "id_categoria": 8
+            }
+        ],
         "paginacion": { "pagina": 2, "limite": 2, "total": 4, "paginas": 2 }
     }
     ```
 
-    (En la respuesta real cada anuncio trae también `precio`, `estado`, `imagen`, `fecha_creacion`
-    e `id_categoria`; aquí están recortados.)
+    Los cuatro anuncios se insertaron a mano con `mysql` (el CRUD de anuncios es la I3), así que los
+    `id` dependen del `AUTO_INCREMENT` que hubiera en ese momento. Se ve también que `precio` vuelve
+    como texto: `DECIMAL(10,2)` lo entrega `mysql2` como cadena para no perder decimales.
 
 - [x] `src/middleware/validar.js`: el `PATCH` valida solo lo que se envía, y el email se rechaza
       aunque se mande el mismo.
@@ -182,7 +202,10 @@ Qué hay que mirar de esta iteración:
 - Exigir la contraseña actual al cambiarla no estaba en la SPEC. Es una decisión del estudiante,
   tomada como mejora de seguridad, y queda documentada en `ARCHITECTURE.md`.
 - La contraseña de `ana@example.com` se cambió a mano durante las pruebas y luego se dejó de vuelta
-  en `Clasify123!` para que la base de desarrollo siga igual que la del seed.
+  en `Clasify123!`, que es la del seed. **La base de desarrollo no queda igual que el seed**: el
+  nombre de `ana` quedó como "Ana Editada" tras probar el `PATCH`, y siguen en la base los cuatro
+  anuncios de prueba y un usuario sobrante (`limite2@example.com`) de las pruebas de paginación de la
+  I1. Se limpia todo en la I6, cuando el CRUD de anuncios de la I3 ya exista.
 
 ## TEST_PLAN
 
@@ -214,7 +237,9 @@ Probadas el 30/09/2026 con el servidor arrancado (`npm start`, MySQL 8.0.46) y p
 | `GET /usuarios/me/anuncios` sin token | Devuelve 401 | Correcto. 401 `SIN_TOKEN` |
 
 Los cuatro anuncios usados en las pruebas se insertaron directamente con `mysql`, porque el CRUD de
-anuncios es la I3 y todavía no hay endpoint para crearlos. Después se borraron.
+anuncios es la I3 y todavía no hay endpoint para crearlos. **Siguen en la base de desarrollo** (ids
+5 a 8, los cuatro de `ana@example.com`); se avisó de ello al revisar la iteración y se limpian en la
+I6, cuando ya exista el endpoint de alta.
 
 ### Tests automáticos
 
@@ -231,12 +256,17 @@ Con **Jest + Supertest** contra la API (base de datos de pruebas `clasify_test`)
 - `tests/auth.test.js` se le añade el test de `TOKEN_CADUCADO`, que era el único caso del
   `TEST_PLAN` de la I1 que solo se había comprobado a mano.
 
-Resultado obtenido el 30/09/2026 con `npm test`: **49 pruebas, 49 correctas, 0 fallidas**, en 34,6 s
+Resultado obtenido el 30/09/2026 con `npm test`: **49 pruebas, 49 correctas, 0 fallidas**, en 39,4 s
 (16 de `auth.test.js` y 33 de `usuarios.test.js`).
-Cobertura: 92,9 % de sentencias, 77,9 % de ramas, 95,6 % de funciones. Sube desde el 86,4 % de la I1.
+Cobertura: 92,5 % de sentencias, 77,9 % de ramas, 93,5 % de funciones. Sube desde el 86,4 % de la I1.
 El fichero peor cubierto sigue siendo `middleware/errores.js` (45,5 %), porque sus caminos internos
 de error (JSON inválido, cuerpo demasiado grande, error no controlado) no se comprueban hasta que
 existan las rutas que los disparan.
+
+> Los porcentajes se tomaron de una ejecución de `npm test -- --coverage` sobre el código tal y como
+> quedó en los commits de esta iteración. Una primera redacción de este documento decía 92,9 % de
+> sentencias y 95,6 % de funciones; al recalcular la cobertura para revisar la iteración no
+> coincidieron, y estos son los valores reales.
 
 ## AI_LOG
 
