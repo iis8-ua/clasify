@@ -256,6 +256,23 @@ describe('POST /clasify_api/anuncios', () => {
       expect(respuesta.status).toBe(200);
       expect(respuesta.headers['content-type']).toContain('image/png');
     });
+
+    // multer escribe el fichero antes de que se compruebe el cuerpo, así que un
+    // error posterior (este o un 403) dejaría la imagen huérfana en `uploads/`.
+    test.each([
+      ['el título está vacío', { ...CAMPOS, titulo: '' }, 'titulo'],
+      ['la categoría no existe', { ...CAMPOS, categoria: '999' }, 'categoria'],
+      ['el precio es negativo', { ...CAMPOS, precio: '-5' }, 'precio']
+    ])('si la imagen es válida pero %s, no queda el fichero en disco', async (_caso, campos, campo) => {
+      const respuesta = await crearPorApi()
+        .field(campos)
+        .attach('imagen', PNG, { filename: 'mesa.png', contentType: 'image/png' });
+
+      expect(respuesta.status).toBe(400);
+      expect(respuesta.body.error).toMatchObject({ codigo: 'VALIDACION', campo });
+      expect(ficherosEnUploads()).toEqual([]);
+      expect(await consultarTotalAnuncios()).toBe(0);
+    });
   });
 });
 
@@ -635,6 +652,22 @@ describe('PATCH /clasify_api/anuncios/:id', () => {
 
     expect(respuesta.body.datos.anuncio.imagen).not.toBeNull();
     expect(ficherosEnUploads()).toHaveLength(1);
+  });
+
+  // La imagen llega antes que la comprobación de autoría: si el 403 no limpiara
+  // el fichero, cualquiera podría llenar `uploads/` con archivos ajenos.
+  test('un 403 con imagen no deja el fichero en disco', async () => {
+    const id = await crearAnuncio();
+
+    const respuesta = await request(app)
+      .patch(`/clasify_api/anuncios/${id}`)
+      .set('Authorization', `Bearer ${tokenCarlos}`)
+      .field({ precio: '1' })
+      .attach('imagen', PNG, { filename: 'intrusa.png', contentType: 'image/png' });
+
+    expect(respuesta.status).toBe(403);
+    expect(respuesta.body.error.codigo).toBe('SIN_PERMISOS');
+    expect(ficherosEnUploads()).toEqual([]);
   });
 });
 
