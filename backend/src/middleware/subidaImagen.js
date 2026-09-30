@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const multer = require('multer');
@@ -47,6 +48,36 @@ const subir = multer({
 }).single('imagen');
 
 /**
+ * Borra la imagen si la petición acaba en error.
+ *
+ * multer escribe el fichero antes de que se compruebe el resto, así que una
+ * validación que falla después (un título vacío, una categoría que no existe)
+ * o un 403 por no ser el autor dejan el fichero en `uploads/` sin que nada lo
+ * referencie. Se mira el estado con el que se respondió: si la operación tuvo
+ * éxito, el nombre del fichero ya está en la fila del anuncio y hay que
+ * conservarlo; si no, sobra.
+ *
+ * El borrado es síncrono y sus errores se ignoran a propósito: la petición ya
+ * tiene su respuesta y un fallo al limpiar no debe convertirla en un 500. Es
+ * síncrono para que el fichero esté borrado cuando el cliente recibe el error,
+ * y no un instante después: en asíncrono, quien mira `uploads/` justo después
+ * del 400 todavía se lo puede encontrar.
+ */
+function borrarImagenSiLaPeticionFalla(req, res, next) {
+  res.on('close', () => {
+    if (res.statusCode < 400 || !req.file) {
+      return;
+    }
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch {
+      // El fichero ya no está, o no se puede borrar: nada que hacer.
+    }
+  });
+  next();
+}
+
+/**
  * Middleware que deja la imagen en `req.file` y el resto de campos en `req.body`.
  * Los errores de multer se convierten en `ApiError` para que los formatee el
  * manejador central con el mismo formato del resto de la API.
@@ -55,7 +86,7 @@ const subir = multer({
 function subirImagen(req, res, next) {
   subir(req, res, (error) => {
     if (!error) {
-      return next();
+      return borrarImagenSiLaPeticionFalla(req, res, next);
     }
     if (error instanceof multer.MulterError) {
       const mensaje = MENSAJES_MULTER[error.code] ?? 'No se ha podido procesar la imagen';
