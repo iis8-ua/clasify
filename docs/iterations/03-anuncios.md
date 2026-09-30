@@ -430,6 +430,15 @@ Lo que se cambió o rechazó de lo generado:
    petición se creaba bien. Se rehizo como un `test.each` sobre `descripcion` y `categoria` que borra
    la clave de verdad.
 
+4. **Encontrado en la revisión previa a la I4, y arreglado allí.** `subirImagen` (multer) escribe el
+   fichero antes de que se compruebe el cuerpo de la petición y antes de que se compruebe quién es el
+   autor, así que una imagen aceptada por el filtro que luego recibía un 400 o un 403 se quedaba en
+   `uploads/` sin que nada la referenciara. Ninguno de los 84 tests de esta iteración lo veía, porque
+   no había ningún caso que combinara una imagen válida con una petición rechazada después. El
+   arreglo y sus cuatro pruebas de regresión están en
+   [04-favoritos.md](04-favoritos.md#correcciones-manuales). Se deja anotado aquí para que el
+   apartado de la subida de esta iteración no dé por hecho un comportamiento que todavía no tenía.
+
 ## COMMITS RELACIONADOS
 
 - `2bea538` - `añadir(anuncios): endpoint de categorías para el filtro del listado`
