@@ -5,6 +5,7 @@ const { Router } = express;
 const authService = require('../services/authService');
 const { autenticar } = require('../middleware/auth');
 const { validarRegistro, validarLogin } = require('../middleware/validar');
+const { ApiError } = require('../errors/ApiError');
 
 const router = Router();
 
@@ -33,10 +34,7 @@ router.post('/login', async (req, res) => {
 router.get('/yo', autenticar, async (req, res) => {
   const usuario = await authService.buscarPorId(req.usuario.id);
   if (!usuario) {
-    res.status(401).json({
-      error: { codigo: 'USUARIO_NO_EXISTE', mensaje: 'El usuario del token ya no existe' }
-    });
-    return;
+    throw ApiError.noAutorizado('USUARIO_NO_EXISTE', 'El usuario del token ya no existe');
   }
   res.status(200).json({ datos: { usuario: authService.projectionPrivada(usuario) } });
 });

@@ -8,6 +8,13 @@ const { ApiError } = require('../errors/ApiError');
 
 const COSTE_HASH = 12;
 
+/**
+ * Hash de un valor que no es la contraseña de nadie. Se compara contra él cuando
+ * el email no existe, para que el login tarde lo mismo exista o no el usuario y
+ * no se puedan ir adivinando qué emails están registrados.
+ */
+const HASH_SENUELO = bcrypt.hashSync('Clasify-senuelo-para-igualar-tiempos', COSTE_HASH);
+
 async function hashearContrasena(contrasena) {
   return bcrypt.hash(contrasena, COSTE_HASH);
 }
@@ -70,8 +77,11 @@ async function registrar({ email, nombre, contrasena }) {
 async function autenticar({ email, contrasena }) {
   const usuario = await buscarPorEmail(email);
 
+  // Se compara siempre, también si el usuario no existe: si no, el tiempo de
+  // respuesta delataría qué emails están registrados.
   const coincide =
-    usuario !== null && (await verificarContrasena(contrasena, usuario.password_hash));
+    (await verificarContrasena(contrasena, usuario?.password_hash ?? HASH_SENUELO)) &&
+    usuario !== null;
 
   if (!coincide) {
     throw ApiError.noAutorizado('CREDENCIALES_INVALIDAS', 'Email o contraseña incorrectos');

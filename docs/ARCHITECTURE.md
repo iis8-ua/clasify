@@ -168,7 +168,8 @@ paginados pero sin el objeto `paginacion`, para no tener dos convenciones distin
 | `ESQUEMA_INVALIDO` | 401 | La cabecera no usa el esquema `Bearer` |
 | `TOKEN_INVALIDO` | 401 | El token no verifica la firma |
 | `TOKEN_CADUCADO` | 401 | El token ha pasado su fecha de expiración |
-| `CREDENCIALES_INVALIDAS` | 401 | Email o contraseña incorrectos (mismo mensaje en ambos casos, para no revelar qué emails existen) |
+| `CREDENCIALES_INVALIDAS` | 401 | Email o contraseña incorrectos, o contraseña actual incorrecta al cambiar la contraseña. Mismo mensaje en todos los casos, para no revelar qué emails existen |
+| `USUARIO_NO_EXISTE` | 401 | El token es válido pero su usuario ya no está en la base de datos |
 | `SIN_PERMISOS` | 403 | El usuario no es el propietario del recurso |
 | `NO_ENCONTRADO` | 404 | El recurso o la ruta no existen |
 | `EMAIL_DUPLICADO` | 409 | Ya existe un usuario con ese email |
@@ -213,6 +214,9 @@ las dos bases.
 - El perfil público no expone el email; solo el propio usuario lo ve en `/usuarios/me`.
 - Las validaciones de entrada se aplican en el backend (precio no negativo, campos obligatorios,
   email único, formatos, etc.).
+- `PATCH /usuarios/me` es un PATCH: solo se validan y se escriben los campos enviados, y los campos
+  desconocidos se ignoran. El email no se puede cambiar (400 si viene en el cuerpo) y cambiar la
+  contraseña exige enviar `password_actual`.
 
 ## Segundo backend (Supabase)
 

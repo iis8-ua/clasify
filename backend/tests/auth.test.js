@@ -134,6 +134,22 @@ describe('Middleware de autenticación', () => {
     expect(respuesta.status).toBe(401);
     expect(respuesta.body.error.codigo).toBe('ESQUEMA_INVALIDO');
   });
+
+  test('una ruta protegida con un token caducado devuelve 401', async () => {
+    const { jwt: configJwt } = require('../src/config');
+    const caducado = require('jsonwebtoken').sign(
+      { sub: 1, email: 'nuevo@example.com' },
+      configJwt.secreto,
+      { algorithm: 'HS256', expiresIn: -10 }
+    );
+
+    const respuesta = await request(app)
+      .get('/clasify_api/auth/yo')
+      .set('Authorization', `Bearer ${caducado}`);
+
+    expect(respuesta.status).toBe(401);
+    expect(respuesta.body.error.codigo).toBe('TOKEN_CADUCADO');
+  });
 });
 
 describe('Formato de respuesta', () => {
