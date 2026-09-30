@@ -19,6 +19,7 @@ app.get('/clasify_api/salud', (req, res) => {
 app.use('/clasify_api/auth', require('./routes/auth'));
 app.use('/clasify_api/usuarios', require('./routes/usuarios'));
 app.use('/clasify_api/categorias', require('./routes/categorias'));
+app.use('/clasify_api/anuncios', require('./routes/anuncios'));
 
 app.use(noEncontrado);
 app.use(manejadorDeErrores);
