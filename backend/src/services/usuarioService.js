@@ -4,12 +4,10 @@ const { consultar, ejecutar } = require('../db/pool');
 const { hashearContrasena, verificarContrasena } = require('./authService');
 const { ApiError } = require('../errors/ApiError');
 const { leerPaginacion, respuestaPaginada, totalDe } = require('../helpers/paginacion');
+const { CAMPOS_LISTADO_ANUNCIO } = require('../helpers/proyecciones');
 
 const CAMPOS_PRIVADOS = 'id, email, nombre, biografia, fecha_alta';
 const CAMPOS_PUBLICOS = 'id, nombre, biografia, fecha_alta';
-
-const CAMPOS_LISTADO_ANUNCIO =
-  'id, titulo, precio, estado, imagen, fecha_creacion, id_categoria';
 
 /** 404 con el mismo phrasing que el 404 de ruta del manejador central. */
 function usuarioNoEncontrado(id) {
