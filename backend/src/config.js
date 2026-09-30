@@ -15,9 +15,21 @@ if (faltantes.length > 0) {
   );
 }
 
+/** Tipos de imagen aceptados y la extensión con la que se guarda cada uno. */
+const TIPOS_IMAGEN = new Map([
+  ['image/jpeg', '.jpg'],
+  ['image/png', '.png'],
+  ['image/webp', '.webp']
+]);
+
 module.exports = {
   port: Number(process.env.PORT) || 3000,
   esTest: process.env.NODE_ENV === 'test',
+  uploads: {
+    carpeta: path.join(__dirname, '..', 'uploads'),
+    tamanoMaximo: 5 * 1024 * 1024,
+    tipos: TIPOS_IMAGEN
+  },
   jwt: {
     secreto: process.env.JWT_SECRET,
     caducidad: process.env.JWT_EXPIRES_IN || '7d'

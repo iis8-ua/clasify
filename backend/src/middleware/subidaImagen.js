@@ -5,16 +5,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const multer = require('multer');
 const { ApiError } = require('../errors/ApiError');
+const { uploads } = require('../config');
 
-const CARPETA = path.join(__dirname, '..', '..', 'uploads');
-const TAMANO_MAXIMO = 5 * 1024 * 1024;
-
-/** Tipos aceptados y la extensión con la que se guarda cada uno. */
-const TIPOS_PERMITIDOS = new Map([
-  ['image/jpeg', '.jpg'],
-  ['image/png', '.png'],
-  ['image/webp', '.webp']
-]);
+const { carpeta: CARPETA, tamanoMaximo: TAMANO_MAXIMO, tipos: TIPOS_PERMITIDOS } = uploads;
 
 /** Traducción de los errores que lanza multer al detectar un `MulterError`. */
 const MENSAJES_MULTER = {
@@ -96,4 +89,4 @@ function subirImagen(req, res, next) {
   });
 }
 
-module.exports = { subirImagen, CARPETA, TAMANO_MAXIMO, TIPOS_PERMITIDOS };
+module.exports = { subirImagen };
