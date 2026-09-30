@@ -35,10 +35,6 @@ function projectionPrivada(usuario) {
   return { id: usuario.id, email: usuario.email, nombre: usuario.nombre };
 }
 
-function projectionPublica(usuario) {
-  return { id: usuario.id, nombre: usuario.nombre };
-}
-
 async function buscarPorId(id) {
   const filas = await consultar(
     'SELECT id, email, nombre, biografia, fecha_alta FROM usuarios WHERE id = ?',
@@ -95,7 +91,6 @@ module.exports = {
   verificarContrasena,
   firmarToken,
   projectionPrivada,
-  projectionPublica,
   buscarPorId,
   buscarPorEmail,
   registrar,
