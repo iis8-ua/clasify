@@ -96,6 +96,9 @@ Campos:
 - Subida de imágenes: `POST`/`PATCH /anuncios` aceptan `multipart/form-data`; tipos permitidos
   `image/jpeg`, `image/png`, `image/webp`; tamaño máximo 5 MB; nombre único generado por el
   servidor; los ficheros viven en `backend/uploads/` y se sirven en `/clasify_api/uploads/:fichero`
+- Longitudes acotadas: `titulo` 150 caracteres (el límite de su `VARCHAR`), `descripcion` 5000 y
+  `precio` como `DECIMAL(10,2)` no negativo. La categoría de un anuncio es obligatoria y tiene que
+  existir: si no, 400 `VALIDACION` con `campo: "categoria"`
 
 ## API REST
 
@@ -117,9 +120,9 @@ petición requiere un token válido.
 | GET | `/usuarios/me/anuncios` | JWT | Anuncios publicados por el usuario autenticado (paginado) |
 | GET | `/usuarios/me/favoritos` | JWT | Anuncios guardados por el usuario autenticado (paginado) |
 | GET | `/usuarios/me/conversaciones` | JWT | Conversaciones activas del usuario autenticado (paginado) |
-| GET | `/categorias` | - | Listado de categorías para los filtros |
+| GET | `/categorias` | - | Listado de categorías para los filtros (sin paginar) |
 | GET | `/anuncios` | - | Listado con búsqueda por texto, filtro por categoría y ordenación por fecha o precio (paginado) |
-| POST | `/anuncios` | JWT | Creación de un anuncio (`multipart/form-data` con campos + `imagen`) |
+| POST | `/anuncios` | JWT | Creación de un anuncio (`multipart/form-data` con campos + `imagen` opcional) |
 | GET | `/anuncios/:id` | - | Detalle + autor + categoría + `num_favoritos` (+ conversación si es participante) |
 | PATCH | `/anuncios/:id` | JWT (autor) | Edición de un anuncio (multipart opcional para la imagen) |
 | PATCH | `/anuncios/:id/estado` | JWT (autor) | Cambio de estado disponible / vendido |
@@ -142,6 +145,42 @@ Los listados aceptan `pagina` (>= 1, por defecto 1) y `limite` (1–100, por def
   "paginacion": { "pagina": 1, "limite": 20, "total": 137, "paginas": 7 }
 }
 ```
+
+`GET /categorias` es la excepción: no va paginado porque son las filas de una tabla de referencia
+que no crece con el uso, y un desplegable de filtros no lo necesita.
+
+### Filtros del listado de anuncios
+
+`GET /anuncios` acepta, además de la paginación:
+
+| Parámetro | Valores | Por defecto |
+|---|---|---|
+| `texto` | Se busca en título y descripción | Sin búsqueda |
+| `categoria` | Id de una categoría existente | Sin filtro |
+| `orden` | `fecha_desc`, `fecha_asc`, `precio_desc`, `precio_asc` | `fecha_desc` |
+| `estado` | `disponible`, `vendido`, `todos` | `disponible` |
+
+- **Por defecto solo salen los anuncios disponibles.** Un marketplace no debe llenar la portada de
+  cosas ya vendidas; los vendidos se piden explícitamente con `?estado=vendido` o `?estado=todos`.
+  El filtro no se aplica a `GET /usuarios/:id/anuncios`, donde sí se ven todos los anuncios del
+  usuario, vendidos incluidos.
+- Un valor fuera de la lista es un 400 `VALIDACION` con el nombre del parámetro en `campo`, no un
+  valor ignorado en silencio.
+- `texto` se busca con `LIKE %texto%` sobre `titulo` y `descripcion`. La comparación usa la
+  colación `utf8mb4_unicode_ci`, así que no distingue mayúsculas, minúsculas ni acentos: `electronica`
+  encuentra `Electrónica`. Los comodines `%` y `_` que escriba el usuario se escapan y se buscan
+  literalmente.
+- Cada ordenación lleva el `id` como segundo criterio para que sea estable entre páginas.
+
+### Multipart e imágenes
+
+- `POST /anuncios` y `PATCH /anuncios/:id` siempre van en `multipart/form-data`, con el fichero en el
+  campo `imagen`. La imagen es **opcional**: sin ella, el anuncio se guarda con `imagen` a `null`.
+- `PATCH /anuncios/:id/estado` no lleva ficheros y sí va en JSON normal.
+- El nombre del fichero lo genera el servidor con `crypto.randomUUID()` y la extensión del tipo
+  declarado, así que un cliente no puede elegir el nombre ni escribir fuera de `uploads/`.
+- Al sustituir la imagen se borra el fichero anterior y al borrar el anuncio se borra la suya, para
+  que no queden huérfanos en `uploads/`. Si el fichero ya no está, no es un error.
 
 ### Formato de error
 
@@ -208,10 +247,16 @@ las dos bases.
 
 ### Notas sobre permisos
 
-- Las operaciones de escritura sobre un anuncio solo se permiten a su autor.
+- Las operaciones de escritura sobre un anuncio solo se permiten a su autor. La comprobación va en
+  este orden: primero que el anuncio exista (404) y después que sea del usuario (403), para que un
+  id inexistente y uno ajeno no se confundan.
 - Una conversación solo es visible y escribible por el vendedor (autor del anuncio) y por el comprador
   que la inició (`id_comprador`); el vendedor usa `/conversaciones/:id` porque puede tener varias.
-- El perfil público no expone el email; solo el propio usuario lo ve en `/usuarios/me`.
+- El perfil público no expone el email; solo el propio usuario lo ve en `/usuarios/me`. El `autor`
+  que va embebido en `GET /anuncios/:id` sale con la misma proyección pública, sin email ni
+  `password_hash`.
+- El detalle de un anuncio devuelve `autor`, `categoria` y `num_favoritos`. `num_favoritos` sale de
+  un `COUNT` sobre `favoritos`; el recurso `conversacion` se añade cuando exista la mensajería (I5).
 - Las validaciones de entrada se aplican en el backend (precio no negativo, campos obligatorios,
   email único, formatos, etc.).
 - `PATCH /usuarios/me` es un PATCH: solo se validan y se escriben los campos enviados, y los campos
