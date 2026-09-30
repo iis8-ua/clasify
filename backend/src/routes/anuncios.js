@@ -3,6 +3,7 @@
 const express = require('express');
 const { Router } = express;
 const anuncioService = require('../services/anuncioService');
+const favoritoService = require('../services/favoritoService');
 const { autenticar } = require('../middleware/auth');
 const { subirImagen } = require('../middleware/subidaImagen');
 const { leerPaginacion } = require('../helpers/paginacion');
@@ -58,6 +59,21 @@ router.patch('/:id/estado', autenticar, async (req, res) => {
 router.delete('/:id', autenticar, async (req, res) => {
   const id = validarId(req.params.id);
   await anuncioService.eliminar(id, req.usuario.id);
+  res.status(204).end();
+});
+
+// El favorito es un subrecurso del anuncio, así que su ruta cuelga de aquí y no
+// de un `/favoritos` propio. El listado de favoritos, en cambio, cuelga del
+// usuario y está en `routes/usuarios.js`.
+router.post('/:id/favorito', autenticar, async (req, res) => {
+  const id = validarId(req.params.id);
+  const { nuevo, favorito } = await favoritoService.añadir(id, req.usuario.id);
+  res.status(nuevo ? 201 : 200).json({ datos: { favorito } });
+});
+
+router.delete('/:id/favorito', autenticar, async (req, res) => {
+  const id = validarId(req.params.id);
+  await favoritoService.quitar(id, req.usuario.id);
   res.status(204).end();
 });
 
