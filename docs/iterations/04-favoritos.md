@@ -337,4 +337,11 @@ Lo que se cambió o rechazó de lo generado:
 
 ## COMMITS RELACIONADOS
 
-- Pendiente. Se rellenará con los hashes después de crear los commits de la iteración.
+- `4cea237` - corregir(anuncios): borra la imagen si la petición acaba en error
+- `851d490` - probar(anuncios): regresión para la imagen huérfana
+- `58c0a40` - refactor(config): mueve la configuración de uploads fuera del middleware
+- `0a775f8` - refactor(anuncios): centraliza la proyección de los listados
+- `99fb679` - refactor(auth): elimina la proyección pública sin uso
+- `4ab2dca` - añadir(favoritos): alta, baja y listado de los anuncios guardados
+- `7b2bef1` - probar(favoritos): 29 tests del alta, la baja y el listado
+- `e0e7fac` - documentar(docs): actualiza los resultados de I4
