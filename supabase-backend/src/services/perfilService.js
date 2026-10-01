@@ -183,4 +183,14 @@ function recibirToken(token) {
   throw deServicio('SIN_TOKEN', 'Falta el token', 401);
 }
 
-module.exports = { perfil, perfilPublico, actualizarPerfil };
+
+
+/**
+ * Los anuncios de un usuario, que es lo que en el backend propio contestan
+ * `/usuarios/:id/anuncios` y `/usuarios/me/anuncios`.
+ */
+async function listarAnunciosPorUsuario(idUsuario, filtros = {}) {
+  return anuncioService.listarPorAutor({ ...filtros, idAutor: idUsuario });
+}
+
+module.exports = { perfil, perfilPublico, actualizarPerfil, listarAnunciosPorUsuario };

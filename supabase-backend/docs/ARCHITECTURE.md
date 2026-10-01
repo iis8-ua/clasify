@@ -54,6 +54,8 @@ Internamente estas funciones llaman a `supabase.auth.*` o a las consultas sobre 
 - created_at
 - id_autor # FK a perfiles
 - id_categoria # FK a categorias
+- titulo_buscable # generado: minúsculas y sin acentos, para buscar
+- descripcion_buscable # generado: minúsculas y sin acentos, para buscar
 
 ## Seguridad (RLS)
 
@@ -62,6 +64,38 @@ Se activa **Row Level Security** en las tablas:
 - `anuncios`: lectura pública; `INSERT`/`UPDATE`/`DELETE` solo si `auth.uid() = id_autor`.
 - `perfiles`: lectura pública (sin exponer datos sensibles); `UPDATE` solo del propio perfil.
 - `categorias`: solo lectura.
+
+## Búsqueda
+
+El backend propio no distingue acentos ni mayúsculas porque la collation de la tabla es
+`utf8mb4_unicode_ci`. En Postgres `ilike` sí los distingue: `electronica` no encontraba
+`Electrónica`. Para igualarlo hay dos opciones y se descartaron las dos baratas:
+
+- `unaccent()` en el `WHERE`: no usa ningún índice y PostgREST no deja escribir funciones dentro de
+  `.or()`, que solo admite operadores sobre columnas.
+- Normalizar en el cliente: obliga a traer todos los anuncios para filtrarlos en memoria.
+
+Lo que se hizo es materializar la búsqueda. La migración `0002` añade `titulo_buscable` y
+`descripcion_buscable`, con el texto en minúsculas y sin acentos, las rellena un trigger en cada
+escritura y las indexa. La migración viene con una comprobación que aborta si queda alguna fila sin
+normalizar, por si algún camino de escritura se saltara el trigger.
+
+El otro lado también importa: el término que escribe quien busca se normaliza igual en JavaScript
+(`normalizarParaBusqueda`), porque si no la columna queda en `electronica` y el término en
+`Electrónica`, y buscar con acento no encontraría nada. Buscar con mayúsculas funciona porque la
+columna ya está en minúsculas. Hay una tabla de letras aparte para las que `unaccent` convierte y la
+descomposición Unicode no toca, como la `ñ`: sin ella, `ninos` no encontraría `niños`.
+
+## Listado por autor
+
+`listarPorAutor` es el equivalente a `/usuarios/me/anuncios` y `/usuarios/:id/anuncios` del backend
+propio. Filtra por `id_autor`, que es una columna y no un JWT, así que es una ruta pública y no
+necesita sesión: RLS ya decide qué se puede leer. Comparte `aplicarFiltros` con `listar`, de forma
+que los dos listados filtran, ordenan y paginan igual.
+
+La paginación va en el mismo objeto que los filtros, no en un argumento aparte. Se probó lo
+contrario y tenía un fallo discreto: `pagina` y `limite` acababan dentro de los filtros y se
+ignoraban en silencio, así que la función devolvía siempre la página de 20.
 
 ## Paginación
 
@@ -75,7 +109,7 @@ hay una sola página.
 
 ## Comportamientos de Supabase que conviene conocer
 
-Estas cuatro cosas se encontraron implementando y probando, y no están en el enunciado:
+Estas seis cosas se encontraron implementando y probando, y no están en el enunciado:
 
 1. **GoTrue descarta las claves propias de `raw_user_meta_data` al registrarse.** De
    `signUp({ data: { nombre } })` solo llega `{ sub, email, email_verified, phone_verified }`. Con
@@ -90,6 +124,11 @@ Estas cuatro cosas se encontraron implementando y probando, y no están en el en
 4. **El plan gratuito tiene límites.** Se puede superar el de registros de usuario por hora
    (unos 30), que es el que más fácil alcanza una suite que crea usuarios, y el de correos enviados,
    que solo se dispara si "Confirm email" está activado.
+5. **`unaccent` no es `IMMUTABLE`.** No se puede usar dentro de una columna generada ni de un
+   índice de expresión sin envolverla. Aquí se evita el problema porque el unaccent lo hace el
+   trigger, que no exige inmutabilidad.
+6. **`getClaims()` necesita el token explícito.** La sesión que guarda el cliente no es la del
+   cliente por token, así que hay que pasárselo.
 
 ## Configuración
 

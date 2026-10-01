@@ -162,7 +162,8 @@ spec. Se queda porque el anuncio necesita el nombre de su autor y no puede traer
 
 ### Resultado
 
-- 105 tests en verde contra el proyecto real de Supabase, repartidos en cinco ficheros.
+- 126 tests en verde contra el proyecto real de Supabase, repartidos en seis ficheros. Los 21 que
+  se añadieron después son de anuncios, al cerrar la paridad con el backend propio.
 - Las siete comprobaciones manuales de la tabla se hicieron con un script contra el proyecto real,
   no solo con los tests.
 - Se comprobó en base de datos que RLS está activo en las tres tablas, que el email está protegido a

@@ -78,9 +78,51 @@ function escaparParaLike(texto) {
   return texto.replace(/([\\%_])/g, '\\$1');
 }
 
-/** `ilike` con el comodín alrededor, ya escapado el texto. */
+/**
+ * Letras que `unaccent` de Postgres pasa a otra, y que la descomposición
+ * Unicode no toca porque no son un acento sino una letra propia. Sin esta tabla
+ * la columna queda con "ene" y el término con "eñe", y no coinciden.
+ */
+const LETRAS_FOLDED = {
+  ñ: 'n',
+  Ñ: 'n',
+  æ: 'ae',
+  Æ: 'ae',
+  œ: 'oe',
+  Œ: 'oe',
+  ø: 'o',
+  Ø: 'o',
+  ß: 'ss',
+  đ: 'd',
+  Đ: 'd',
+  ł: 'l',
+  Ł: 'l',
+  þ: 'th',
+  Þ: 'th',
+  ð: 'd',
+  Ð: 'd'
+};
+
+/**
+ * Quita acentos y baja a minúsculas, igual que hace la función
+ * `normalizar_para_busqueda` de la migración 0002 sobre las columnas.
+ *
+ * Hace falta en los dos lados: la columna se guarda normalizada, así que si el
+ * término que escribe la persona no se normaliza igual, buscar "electronica"
+ * encuentra "Electrónica" pero buscar "Electrónica" no encuentra nada. Y lo
+ * segundo es justo lo que escribe la gente.
+ */
+function normalizarParaBusqueda(texto) {
+  return String(texto)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u00C0-\u024F]/g, (letra) => LETRAS_FOLDED[letra] ?? letra)
+    .toLowerCase();
+}
+
+/** `ilike` con el comodín alrededor, ya escapado y normalizado el texto. */
 function patronBusqueda(texto) {
-  return `%${escaparParaLike(texto)}%`;
+  return `%${escaparParaLike(normalizarParaBusqueda(texto))}%`;
 }
 
 module.exports = {
@@ -89,5 +131,6 @@ module.exports = {
   respuestaPaginada,
   contar,
   escaparParaLike,
+  normalizarParaBusqueda,
   patronBusqueda
 };

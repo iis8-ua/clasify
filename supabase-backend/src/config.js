@@ -25,9 +25,6 @@ module.exports = {
   url: obligatoria('SUPABASE_URL'),
   claveAnon: obligatoria('SUPABASE_ANON_KEY'),
 
-  /** Solo para `npm run db:migrate`, nunca para el código de la aplicación. */
-  urlBaseDeDatos: process.env.SUPABASE_DB_URL || null,
-
-  emailPruebas: process.env.SUPABASE_TEST_EMAIL || null,
-  contrasenaPruebas: process.env.SUPABASE_TEST_PASSWORD || null
+  /** Solo para `npm run db:migrate` y `db:limpiar`, nunca para la aplicación. */
+  urlBaseDeDatos: process.env.SUPABASE_DB_URL || null
 };

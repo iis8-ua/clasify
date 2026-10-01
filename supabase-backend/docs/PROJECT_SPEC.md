@@ -34,6 +34,7 @@ Supabase:
 | `imagen` | `VARCHAR(255)` | `TEXT` |
 | fecha de alta | `fecha_creacion` `TIMESTAMP` | `created_at` `TIMESTAMPTZ` |
 | `id_autor` | `INT` a `usuarios` | `UUID` a `auth.users` |
+| columnas de búsqueda | la collation `utf8mb4_unicode_ci` | `titulo_buscable` y `descripcion_buscable` |
 
 El `id` es UUID porque el autor tiene que ser el mismo identificador que da Supabase Auth, para que
 `auth.uid()` y la clave foránea coincidan. La fecha se llama `created_at` porque es la convención de
@@ -54,3 +55,14 @@ PostgREST para las columnas de fecha de alta.
 
 Los dos backends son proyectos independientes y no comparten código. Este proyecto tiene su propio
 proceso SDD en `docs/`.
+
+Que sean independientes no quiere decir que se comporten distinto. Las operaciones que aquí existen
+se hicieron coincidir con las del otro:
+
+- El listado filtra por estado, y por defecto enseña solo los disponibles.
+- La búsqueda no distingue acentos ni mayúsculas, como la collation del backend propio.
+- Hay listado por autor, que corresponde a `/usuarios/me/anuncios` y `/usuarios/:id/anuncios`.
+
+Las diferencias que quedan son de alcance y están en "Fuera de alcance": favoritos, mensajería,
+valoraciones, subida de imágenes y frontend. Lo que las cubre por escrito es
+`tests/paridadConBackendPropio.test.js`.

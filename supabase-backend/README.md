@@ -33,7 +33,11 @@ Para las migraciones hace falta la Connection string de la pestaña **SESSION PO
 | `SUPABASE_URL` | Project URL |
 | `SUPABASE_ANON_KEY` | Publishable key (antes "anon") |
 | `SUPABASE_DB_URL` | **Solo** migraciones y limpieza. El código de la app no la usa. |
-| `SUPABASE_TEST_EMAIL`, `SUPABASE_TEST_PASSWORD` | Credenciales de los tests |
+
+No hay variables para los tests: no necesitan ninguna credencial. Se registran
+solos con emails generados y una contraseña fija que vive en
+`tests/ayudaSupabase.js`, que no es un secreto. Lo que sí hace falta es la
+`SUPABASE_ANON_KEY` de este proyecto: los tests hablan con Supabase real.
 
 `.env` está en el `.gitignore` del repo y no se sube nunca.
 
@@ -56,25 +60,31 @@ const contexto = { token, usuarioId: usuario.id };
 // Perfil propio, con el email (solo lo ve quien llama).
 await perfilService.perfil({ token });
 
-// Anuncios.
+// Anuncios. Por defecto salen solo los disponibles; estado: 'todos' para ver
+// también los vendidos, o 'vendido' para ver solo esos.
 await anuncioService.listar({ texto: 'bici', categoria: 8, pagina: 1, limite: 20 });
 await anuncioService.crear(
   { titulo: 'Bicicleta', descripcion: 'Poca uso', precio: 250, id_categoria: 8 },
   contexto
 );
+
+// Los anuncios de una persona, que es lo que en el backend propio contestan
+// /usuarios/me/anuncios y /usuarios/:id/anuncios.
+await anuncioService.listarPorAutor({ idAutor: usuario.id });
+await perfilService.listarAnunciosPorUsuario(usuario.id);
 ```
 
 ## Estructura
 
 ```
-migrations/     SQL de la migración, se aplica por orden de nombre
+migrations/     SQL de las migraciones, se aplican por orden de nombre
 src/
   index.js             Agrupa y exporta los servicios
   config.js             Lee el .env y falla pronto si falta algo
   db/migrar.js          Aplica las migraciones (usa pg)
   db/limpiar.js         Vacía el proyecto, con confirmación explícita
   errors/               Traduce los errores de Supabase a errores de la capa
-  helpers/listado.js    Paginación y total
+  helpers/listado.js    Paginación, total y normalización para la búsqueda
   services/             authService, perfilService, anuncioService, categoriaService
   supabase/cliente.js   Cliente sin sesión y cliente por token
 tests/         Jest contra el proyecto real
@@ -103,6 +113,23 @@ Dos cosas a tener en cuenta antes de ejecutarlas:
   que los usuarios se acumulan. Cada ejecución registra unos nueve, y el plan gratuito limita los
   registros por hora: se pueden hacer tres o cuatro seguidas. Para vaciar el proyecto:
   `npm run db:limpiar -- --confirmar`.
+
+## Qué tiene y qué no tiene frente al backend propio
+
+Lo de este backend son las mismas operaciones de announcement, perfil y categorías, pero no es una
+copia del otro: el enunciado deja fuera de esta iteración los favoritos, la mensajería y las
+valoraciones, y aquí no están. Lo que sí se persiguió es que las operaciones que existen se
+comporten igual, y eso se comprueba en `tests/paridadConBackendPropio.test.js`.
+
+Dos cosas hubo que hacerlas a medida para que coincidieran:
+
+- **El listado filtra por estado.** Por defecto enseña solo los disponibles y con `estado: 'todos'`
+  aparecen también los vendidos, igual que en MySQL.
+- **La búsqueda no distingue acentos.** MySQL lo consigue con la collation
+  `utf8mb4_unicode_ci`; en Postgres se materializa con las columnas `titulo_buscable` y
+  `descripcion_buscable`, que un trigger deja en minúsculas y sin acentos. Se normaliza también el
+  término que escribe quien busca, porque si no "electronica" encontraría "Electrónica" pero
+  "Electrónica" no encontraría nada.
 
 ## Documentación
 

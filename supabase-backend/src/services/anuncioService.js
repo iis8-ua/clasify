@@ -12,6 +12,7 @@ const {
 const LONGITUD_MAXIMA_TITULO = 120;
 const LONGITUD_MAXIMA_DESCRIPCION = 5000;
 const ESTADOS = ['disponible', 'vendido'];
+const ESTADO_POR_DEFECTO = 'disponible';
 
 /** Columnas del anuncio con su autor (público) y su categoría embebidos. */
 const COLUMNAS = `
@@ -166,13 +167,19 @@ async function crear(datos, { token, usuarioId }) {
  * `NUMERIC` en Postgres, así que ordenar por precio ordena por valor: no hay el
  * problema de "100" antes que "20" que daría ordena por texto.
  */
-function aplicarFiltros(base, { texto, categoria, orden = 'fecha_desc' }) {
+function aplicarFiltros(base, { texto, categoria, estado, orden = 'fecha_desc' }) {
   let consulta = base;
 
   if (texto && String(texto).trim()) {
+    // Busca sobre las columnas normalizadas, no sobre las originales: en el
+    // backend propio la collation utf8mb4_unicode_ci hace que "electronica"
+    // encuentre "Electrónica", y para igualarlo en Postgres el texto tiene que
+    // venir ya en minúsculas y sin acentos. El trigger de la migración 0002 se
+    // encarga al escribir.
     const patron = patronBusqueda(String(texto).trim());
-    // Un `or` sobre el mismo texto: busca en el título o en la descripción.
-    consulta = consulta.or(`titulo.ilike.${patron},descripcion.ilike.${patron}`);
+    consulta = consulta.or(
+      `titulo_buscable.ilike.${patron},descripcion_buscable.ilike.${patron}`
+    );
   }
 
   if (categoria !== undefined && categoria !== null && categoria !== '') {
@@ -181,6 +188,20 @@ function aplicarFiltros(base, { texto, categoria, orden = 'fecha_desc' }) {
       throw deServicio('VALIDACION', 'La categoría no es válida', 400);
     }
     consulta = consulta.eq('id_categoria', numero);
+  }
+
+  // Por defecto se ocultan los vendidos, igual que en el backend propio, y
+  // 'todos' los enseña.
+  if (estado !== 'todos') {
+    const valor = estado ?? ESTADO_POR_DEFECTO;
+    if (!ESTADOS.includes(valor)) {
+      throw deServicio(
+        'VALIDACION',
+        `El estado tiene que ser ${ESTADOS.join(', ')} o todos`,
+        400
+      );
+    }
+    consulta = consulta.eq('estado', valor);
   }
 
   const ORDENES = {
@@ -206,9 +227,9 @@ function aplicarFiltros(base, { texto, categoria, orden = 'fecha_desc' }) {
  * esa página, no el total de la tabla; para el total hay que pedirlo aparte con
  * `head: true`.
  */
-async function listar({ texto, categoria, orden = 'fecha_desc', ...opciones } = {}) {
+async function listar({ texto, categoria, estado, orden = 'fecha_desc', ...opciones } = {}) {
   const paginacion = leerPaginacion(opciones);
-  const filtros = { texto, categoria, orden };
+  const filtros = { texto, categoria, estado, orden };
 
   const [total, { data, error }] = await Promise.all([
     contar(
@@ -366,8 +387,48 @@ async function eliminar(id, { token, usuarioId }) {
   return { eliminado: true };
 }
 
+
+/**
+ * Lista los anuncios de un autor, con los mismos filtros y paginación que
+ * `listar`.
+ *
+ * Es una ruta pública en el backend propio (`/usuarios/:id/anuncios`), y aquí
+ * también lo es: el filtro va sobre `id_autor`, que es una columna, no sobre un
+ * JWT, así que no hace falta sesión y RLS se encarga de no filtrar nada.
+ */
+async function listarPorAutor({ idAutor, pagina, limite, ...filtros } = {}) {
+  if (!idAutor) {
+    throw deServicio('VALIDACION', 'Falta el autor de los anuncios', 400);
+  }
+
+  // La paginación va en el mismo objeto que los filtros, como en `listar`. Con un
+  // argumento aparte era fácil dejar `pagina` y `limite` dentro de los filtros y
+  // que se ignoraran en silencio, devolviendo siempre la página de 20.
+  const pag = leerPaginacion({ pagina, limite });
+
+  const { desde, hasta } = pag;
+  const [total, { data, error }] = await Promise.all([
+    contar(
+      aplicarFiltros(cliente.from('anuncios').select('id', { count: 'exact', head: true }), filtros).eq(
+        'id_autor',
+        idAutor
+      )
+    ),
+    aplicarFiltros(cliente.from('anuncios').select(COLUMNAS), filtros)
+      .eq('id_autor', idAutor)
+      .range(desde, hasta)
+  ]);
+
+  if (error) {
+    throw desdeError(error, { tabla: 'anuncios' });
+  }
+
+  return respuestaPaginada(data.map(aAnuncio), pag, total);
+}
+
 module.exports = {
   listar,
+  listarPorAutor,
   obtener,
   crear,
   actualizar,
