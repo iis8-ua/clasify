@@ -38,6 +38,11 @@ La diferencia de fondo es dónde se aplican las reglas: aquí no hay servidor pr
 parte de la lógica vive en la base de datos con RLS y no en código. La capa se implementó en la
 iteración 7; su puesta en marcha está en `supabase-backend/README.md`.
 
+Lo que no está en el segundo backend son los recursos secundarios (favoritos, mensajería y
+valoraciones) y la subida de imágenes, porque el enunciado los deja fuera. Lo que sí se hizo es que
+las operaciones que quedan se comporten como las del backend propio, incluida la búsqueda sin
+distinción de acentos: `tests/paridadConBackendPropio.test.js` lo comprueba.
+
 ## Requisitos
 
 | Herramienta | Versión |

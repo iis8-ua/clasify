@@ -117,6 +117,8 @@ propio.
   estado, sin tocar la red, para poder distinguir un fallo de validación de un fallo de Supabase.
 - `tests/listado.test.js`: paginación, cálculo de páginas y escapado de comodines.
 - `tests/lecturaPublica.test.js`: listado y categorías sin sesión.
+- `tests/paridadConBackendPropio.test.js`: búsqueda con y sin acentos, filtro por estado y
+  listado por autor, contra lo que hace el backend propio.
 
 ## AI_LOG
 
@@ -149,7 +151,8 @@ el total.
 
 ### Resultado
 
-- 105 tests en verde contra el proyecto real, de los cuales 47 son de esta iteración.
+- 126 tests en verde contra el proyecto real, de los cuales 68 son de esta iteración: los 47
+  originales más 21 de la vuelta de paridad.
 - Las siete comprobaciones manuales de la tabla, hechas con un script contra el proyecto real.
 - El listado público se comprobó sin sesión: 89 anuncios en total y 18 páginas de 5.
 
@@ -162,6 +165,32 @@ el total.
 
 - Se comprobó con `pg` que las cuatro políticas de RLS existen y que `anon` puede leer pero no
   escribir, en lugar de fiarse de que el código las crea.
+
+### Segunda vuelta: paridad con el backend propio
+
+Al comparar los dos backends uno detrás de otro, se vio que a esta iteración le faltaban dos cosas
+que el backend propio sí tenía, y que el SPEC de `02-anuncios.md` no pedía:
+
+- **Listar los anuncios de un autor**, que es lo que contestan `/usuarios/me/anuncios` y
+  `/usuarios/:id/anuncios`. Sin esto un usuario no puede ver sus propios anuncios.
+- **Filtrar el listado por estado.** Por defecto se ve solo lo disponible, con `todos` aparecen los
+  vendidos.
+
+Y una diferencia de comportamiento que sí dolía: en MySQL, buscar `electronica` encuentra
+`Electrónica`, porque la collation `utf8mb4_unicode_ci` lo hace. En Postgres `ilike` no, así que
+había que arreglarlo.
+
+Las tres quedaron arregladas y con pruebas propias en `tests/paridadConBackendPropio.test.js`, que
+es el sitio donde se decora no volver a perderlas. En esa vuelta aparecieron dos bugs más:
+
+- La primera versión de `listarPorAutor` aceptaba la paginación en un argumento aparte del de los
+  filtros. Al llamarla como se llamaba a `listar`, `pagina` y `limite` acababan dentro de los
+  filtros y se ignoraban sin avisar, así que devolvía siempre 20 filas. Lo pilló un test que pedía
+  `limite: 1` y recibía 20.
+- Al poner la búsqueda sobre las columnas ya normalizadas, buscar `Electrónica` dejó de encontrar
+  nada, porque el término llegaba con el acento y la columna sin él. El arreglo fue normalizar
+  también el término, y en el camino `ñ` daba otra falla: `unaccent` la convierte en `n` pero la
+  descomposición Unicode no, porque no es un acento sino una letra propia.
 
 ## COMMITS RELACIONADOS
 
