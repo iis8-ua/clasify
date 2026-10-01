@@ -280,4 +280,9 @@ bien:
 
 ## COMMITS RELACIONADOS
 
-- Pendiente. Se rellenará con los hashes después de crear los commits de la iteración.
+- `034687a` añadir(valoraciones): valoración entre usuarios con media y recuento
+- `347b952` añadir(mensajería): devuelve los últimos mensajes en el detalle del anuncio
+- `e5c7b6c` probar(valoraciones): 50 tests de valoración, validación, cascada y resúmenes
+- `93072a5` probar(mensajería): 12 tests del adelanto del hilo
+- `e54099b` documentar(docs): valoraciones y segundo recurso del detalle
+- `c4f0ce0` documentar(docs): cierra la iteración 06 de valoraciones
