@@ -18,6 +18,17 @@ const CAMPOS_AUTOR = CAMPOS_PUBLICOS.split(', ')
   .map((campo) => `u.${campo} AS autor_${campo}`)
   .join(', ');
 
+/**
+ * Resumen de valoraciones del autor, en la misma consulta que el detalle. Un
+ * comprador decide si escribirle mirando su media, así que si no está aquí tendría
+ * que abrir el perfil aparte.
+ */
+const RESUMEN_AUTOR = `
+        (SELECT ROUND(AVG(puntuacion), 2) FROM valoraciones WHERE id_valorado = u.id)
+          AS autor_valoracion_media,
+        (SELECT COUNT(*) FROM valoraciones WHERE id_valorado = u.id)
+          AS autor_num_valoraciones`;
+
 const ORDEN_POR_DEFECTO = 'fecha_desc';
 const ESTADO_POR_DEFECTO = 'disponible';
 
@@ -124,6 +135,7 @@ async function detalle(id) {
     `SELECT a.id, a.titulo, a.descripcion, a.precio, a.estado, a.imagen, a.fecha_creacion,
             a.id_autor, a.id_categoria,
             ${CAMPOS_AUTOR},
+            ${RESUMEN_AUTOR},
             c.id AS categoria_id, c.nombre AS categoria_nombre,
             (SELECT COUNT(*) FROM favoritos f WHERE f.id_anuncio = a.id) AS num_favoritos
        FROM anuncios a
@@ -138,6 +150,8 @@ async function detalle(id) {
     throw anuncioNoEncontrado(id);
   }
 
+  const numValoraciones = Number(fila.autor_num_valoraciones ?? 0);
+
   return {
     id: fila.id,
     titulo: fila.titulo,
@@ -150,7 +164,9 @@ async function detalle(id) {
       id: fila.autor_id,
       nombre: fila.autor_nombre,
       biografia: fila.autor_biografia,
-      fecha_alta: fila.autor_fecha_alta
+      fecha_alta: fila.autor_fecha_alta,
+      valoracion_media: numValoraciones === 0 ? null : Number(fila.autor_valoracion_media),
+      num_valoraciones: numValoraciones
     },
     categoria: { id: fila.categoria_id, nombre: fila.categoria_nombre },
     num_favoritos: Number(fila.num_favoritos)
