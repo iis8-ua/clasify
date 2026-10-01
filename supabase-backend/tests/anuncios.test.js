@@ -2,7 +2,12 @@
 
 const { anuncioService } = require('../src');
 const { ErrorDeServicio } = require('../src/errors/ErrorDeServicio');
-const { usuario, dosUsuarios, crearAnuncio } = require('./ayudaSupabase');
+const {
+  usuario,
+  usuarioEditable,
+  dosUsuarios,
+  crearAnuncio
+} = require('./ayudaSupabase');
 
 /**
  * Tests de escritura de anuncios contra Supabase real.
@@ -206,5 +211,131 @@ describe('RLS visto desde la API', () => {
     // Si el % no se escapara, esto traería el anuncio entero.
     const resultado = await anuncioService.listar({ texto: 'cincuenta%' });
     expect(resultado.datos.some((x) => x.id === anuncio.id)).toBe(false);
+  });
+});
+describe('listar los anuncios de un autor', () => {
+  test('devuelve solo los anuncios de ese autor', async () => {
+    const [a, b] = await dosUsuarios();
+    const mio = await crearAnuncio(a.contexto, { titulo: 'Anuncio solo de A' });
+    await crearAnuncio(b.contexto, { titulo: 'Anuncio solo de B' });
+
+    const resultado = await anuncioService.listarPorAutor({ idAutor: a.id, estado: 'todos' });
+
+    expect(resultado.datos.map((x) => x.id)).toContain(mio.id);
+    expect(resultado.datos.map((x) => x.titulo)).not.toContain('Anuncio solo de B');
+  });
+
+  test('filtra por estado, texto y categoría como el listado general', async () => {
+    const u = await usuario();
+    const anuncio = await crearAnuncio(u.contexto, { titulo: 'Silla de madera' });
+
+    const porTexto = await anuncioService.listarPorAutor({
+      idAutor: u.id,
+      estado: 'todos',
+      texto: 'madera'
+    });
+    const porCategoria = await anuncioService.listarPorAutor({
+      idAutor: u.id,
+      estado: 'todos',
+      categoria: 8
+    });
+    const porOtro = await anuncioService.listarPorAutor({
+      idAutor: u.id,
+      estado: 'todos',
+      texto: 'texto que no aparece en ningun anuncio'
+    });
+
+    expect(porTexto.datos.map((x) => x.id)).toContain(anuncio.id);
+    expect(porCategoria.datos.map((x) => x.id)).toContain(anuncio.id);
+    expect(porOtro.datos).toHaveLength(0);
+  });
+
+  test('omite los vendidos salvo que se pidan todos', async () => {
+    const u = await usuario();
+    const anuncio = await crearAnuncio(u.contexto, { titulo: 'Vendido de A' });
+    await anuncioService.cambiarEstado(anuncio.id, 'vendido', u.contexto);
+
+    const porDefecto = await anuncioService.listarPorAutor({ idAutor: u.id });
+    const todos = await anuncioService.listarPorAutor({ idAutor: u.id, estado: 'todos' });
+    const vendidos = await anuncioService.listarPorAutor({ idAutor: u.id, estado: 'vendido' });
+
+    expect(porDefecto.datos.map((x) => x.id)).not.toContain(anuncio.id);
+    expect(todos.datos.map((x) => x.id)).toContain(anuncio.id);
+    expect(vendidos.datos.map((x) => x.id)).toContain(anuncio.id);
+  });
+
+  test('devuelve el total y las páginas, no solo los datos', async () => {
+    const u = await usuario();
+    await crearAnuncio(u.contexto, { titulo: 'Para contar' });
+
+    const resultado = await anuncioService.listarPorAutor({
+      idAutor: u.id,
+      estado: 'todos'
+    });
+
+    expect(typeof resultado.paginacion.total).toBe('number');
+    expect(resultado.paginacion.total).toBeGreaterThanOrEqual(1);
+    expect(resultado.paginacion.paginas).toBe(
+      Math.ceil(resultado.paginacion.total / resultado.paginacion.limite)
+    );
+  });
+
+  test('pagina de verdad, sin repetir ni perder anuncios', async () => {
+    const u = await usuarioEditable();
+    // El usuario es compartido y el proyecto no se limpia, así que no se puede
+    // asumir que el anuncio recién creado cae en la primera página: lo que se
+    // comprueba es que dos páginas seguidas no se solapen.
+    const creado = await crearAnuncio(u.contexto, { titulo: 'Para paginar por autor' });
+
+    const uno = await anuncioService.listarPorAutor({
+      idAutor: u.id,
+      estado: 'todos',
+      pagina: 1,
+      limite: 1
+    });
+    const otro = await anuncioService.listarPorAutor({
+      idAutor: u.id,
+      estado: 'todos',
+      pagina: 2,
+      limite: 1
+    });
+
+    expect(uno.datos).toHaveLength(1);
+    expect(otro.datos.map((x) => x.id)).not.toContain(uno.datos[0].id);
+
+    // Y el anuncio nuevo tiene que salir en alguna de las dos primeras páginas.
+    const entreLasDos = [...uno.datos, ...otro.datos].map((x) => x.id);
+    expect(entreLasDos).toContain(creado.id);
+  });
+
+  test('un autor que no tiene anuncios da una página vacía, no un error', async () => {
+    // No se usa uno de los usuarios compartidos porque a estas alturas ya tienen
+    // anuncios de las ejecuciones anteriores; se usa un id que no existe.
+    const resultado = await anuncioService.listarPorAutor({
+      idAutor: '00000000-0000-0000-0000-000000000000',
+      estado: 'todos'
+    });
+
+    expect(resultado.datos).toHaveLength(0);
+    expect(resultado.paginacion.total).toBe(0);
+  });
+
+  test('respeta el límite pedido, no el de por defecto', async () => {
+    const u = await usuario();
+    await crearAnuncio(u.contexto, { titulo: 'Uno' });
+    await crearAnuncio(u.contexto, { titulo: 'Dos' });
+
+    const resultado = await anuncioService.listarPorAutor({
+      idAutor: u.id,
+      estado: 'todos',
+      limite: 1
+    });
+
+    expect(resultado.datos).toHaveLength(1);
+    expect(resultado.paginacion.limite).toBe(1);
+  });
+
+  test('rechaza que no le digan de quién son los anuncios', async () => {
+    await expect(anuncioService.listarPorAutor({})).rejects.toThrow(ErrorDeServicio);
   });
 });
