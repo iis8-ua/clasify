@@ -44,6 +44,21 @@ router.get('/', async (req, res) => {
 // El detalle es público, así que el token es opcional: si viene y su usuario
 // participa en alguna conversación del anuncio, se le añade su `conversacion`.
 // Sin token, o con uno que no se pueda verificar, el anuncio se sirve igual.
+/**
+ * Detalle de un anuncio. Lleva token **opcional** porque tres de las cosas que
+ * devuelve dependen de quién pregunta, y ninguna es obligatoria:
+ *
+ *   * `conversacion`: el `id` del hilo, solo si participa en alguno. Es lo que
+ *     permite al cliente pintar "escribir" en vez de "contactar".
+ *   * `ultimos_mensajes`: los tres últimos del hilo y su total, también solo si
+ *     participa. Es el recurso secundario que el enunciado pide acompañar al
+ *     recurso principal; un tercero que no participa no los ve, que es lo mismo
+ *     que impide leerlos con el `GET` del hilo.
+ *   * El autor, con su resumen de valoraciones, sale siempre.
+ *
+ * Un token que no verifica deja la petición como anónima en lugar de dar un 401:
+ * entrar en la ficha de un anuncio no debería exigir haber iniciado sesión.
+ */
 router.get('/:id', autenticarSiHayToken, async (req, res) => {
   const id = validarId(req.params.id);
   const anuncio = await anuncioService.detalle(id);
@@ -52,6 +67,8 @@ router.get('/:id', autenticarSiHayToken, async (req, res) => {
     const conversacion = await conversacionService.deParticipante(id, req.usuario.id);
     if (conversacion) {
       anuncio.conversacion = { id: conversacion.id };
+      anuncio.ultimos_mensajes = await mensajeService.ultimos(conversacion);
+      anuncio.num_mensajes = await mensajeService.contar(conversacion);
     }
   }
 

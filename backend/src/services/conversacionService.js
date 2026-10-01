@@ -85,13 +85,21 @@ async function exigirParticipante(id, idUsuario) {
  * vendedor, o `null` si no tiene ninguna con ese anuncio. No hace ninguna
  * comprobación: la usa el detalle del anuncio, que es público y donde el
  * vendedor también puede tener conversación.
+ *
+ * Si el usuario es el vendedor puede tener varias con el mismo anuncio, así que
+ * el `ORDER BY` y el `LIMIT` no son adorno: sin ellos MySQL devolvería la primera
+ * que encuentre, que no es necesariamente la última y con lo que el detalle
+ * enseñaría un hilo arbitrario. Con el orden sale la más reciente, que es la que
+ * de verdad le interesa. Para el comprador da igual, porque solo puede tener una.
  */
 async function deParticipante(idAnuncio, idUsuario) {
   const filas = await consultar(
     `SELECT ${COLUMNAS_CONVERSACION}
        FROM conversaciones c
        JOIN anuncios a ON a.id = c.id_anuncio
-      WHERE c.id_anuncio = ? AND (c.id_comprador = ? OR a.id_autor = ?)`,
+      WHERE c.id_anuncio = ? AND (c.id_comprador = ? OR a.id_autor = ?)
+      ORDER BY c.fecha_creacion DESC, c.id DESC
+      LIMIT 1`,
     [idAnuncio, idUsuario, idUsuario]
   );
   return filas[0] ?? null;
