@@ -89,6 +89,11 @@ Campos:
 - Los textos son `VARCHAR` (con `utf8mb4` para los acentos y la `ñ`), salvo la `descripcion` de los anuncios, que será `TEXT`
 - El `precio` es `DECIMAL(10,2)` para evitar errores de redondeo de coma flotante
 - `leido` es `BOOLEAN` (`TINYINT(1)`), y `estado` es `ENUM('disponible', 'vendido')`
+- Los `id` no son correlativos y no tienen que serlo: el alta de favoritos y de conversaciones usa
+  `INSERT IGNORE` para que la restricción `UNIQUE` decida sin preguntar antes, y MySQL consume un
+  valor del `AUTO_INCREMENT` cada vez que el `INSERT` se descarta por duplicado. Comprobado en
+  MySQL 8.0.46: tras un `INSERT` correcto y cinco ignorados, el siguiente `INSERT` correcto sale con
+  `id` 7. Un cliente no debe suponer que el `id` siguiente es `id_anterior + 1`.
 - Las claves foráneas se definen con `FOREIGN KEY ... ON DELETE CASCADE` para que no queden registros huérfanos al eliminar un anuncio, una conversación o un usuario
 - El email de `usuarios` es `UNIQUE`
 - Restricción de favoritos: `UNIQUE (id_usuario, id_anuncio)`
@@ -130,8 +135,8 @@ petición requiere un token válido.
 | POST | `/anuncios/:id/favorito` | JWT | Marca el anuncio como favorito (idempotente). 201 si es nuevo, 200 si ya estaba |
 | DELETE | `/anuncios/:id/favorito` | JWT | Elimina el favorito (quitar de favoritos) |
 | GET | `/anuncios/:id/mensajes` | JWT (comprador) | Mensajes de mi conversación con el vendedor (paginado). 400 si lo pide el vendedor |
-| GET | `/clasify_api/uploads/:fichero` | - | Sirve una imagen subida |
 | POST | `/anuncios/:id/mensajes` | JWT | Inicia (o reutiliza) la conversación con el vendedor y envía el mensaje |
+| GET | `/clasify_api/uploads/:fichero` | - | Sirve una imagen subida |
 | GET | `/conversaciones/:id/mensajes` | JWT (participante) | Mensajes de una conversación (paginado) |
 | POST | `/conversaciones/:id/mensajes` | JWT (participante) | Envía un mensaje en una conversación |
 
@@ -171,6 +176,24 @@ que no crece con el uso, y un desplegable de filtros no lo necesita.
   encuentra `Electrónica`. Los comodines `%` y `_` que escriba el usuario se escapan y se buscan
   literalmente.
 - Cada ordenación lleva el `id` como segundo criterio para que sea estable entre páginas.
+
+### Filtros del listado de mensajes
+
+Los dos listados de mensajes (`/anuncios/:id/mensajes` y `/conversaciones/:id/mensajes`) aceptan,
+además de la paginación:
+
+| Parámetro | Valores | Por defecto |
+|---|---|---|
+| `desde` | `inicio`, `final` | `inicio` |
+
+- `inicio` cuenta las páginas desde el principio del hilo, que es lo habitual en cualquier listado
+  paginado. `final` cuenta desde el otro extremo: la primera página trae los últimos mensajes del
+  hilo, que es lo que necesita quien está dentro de una conversación y quiere los últimos sin
+  tener que paginar hasta el final.
+- **Dentro de la página el orden siempre es del más antiguo al más nuevo**, también con
+  `desde=final`, porque es como se lee un hilo. `desde=final` solo cambia por dónde se cuentan las
+  páginas, no cómo se ordena lo que devuelve cada una.
+- Un valor fuera de la lista es un 400 `VALIDACION` con `campo: "desde"`, como el resto de filtros.
 
 ### Multipart e imágenes
 
@@ -251,12 +274,18 @@ las dos bases.
   este orden: primero que el anuncio exista (404) y después que sea del usuario (403), para que un
   id inexistente y uno ajeno no se confundan.
 - Una conversación solo es visible y escribible por el vendedor (autor del anuncio) y por el comprador
-  que la inició (`id_comprador`); el vendedor usa `/conversaciones/:id` porque puede tener varias.
+  que la inició (`id_comprador`). El comprador usa `/anuncios/:id/mensajes`, que encuentra su hilo a
+  partir del anuncio; el vendedor usa `/conversaciones/:id/mensajes`, porque puede tener varios.
+  Si el vendedor pide la ruta del comprador, devuelve 400 `VALIDACION` con `campo: "anuncio"` y el
+  mensaje que le dice dónde están las suyas.
 - El perfil público no expone el email; solo el propio usuario lo ve en `/usuarios/me`. El `autor`
   que va embebido en `GET /anuncios/:id` sale con la misma proyección pública, sin email ni
   `password_hash`.
 - El detalle de un anuncio devuelve `autor`, `categoria` y `num_favoritos`. `num_favoritos` sale de
-  un `COUNT` sobre `favoritos`; el recurso `conversacion` se añade cuando exista la mensajería (I5).
+  un `COUNT` sobre `favoritos`. Si quien lo pide es participante de alguna conversación de ese anuncio,
+  el detalle añade además `conversacion: { id }`, para que el cliente sepa si ya hay un hilo abierto
+  sin tener que escribir un mensaje para averiguarlo. La ruta es pública, así que el token es
+  opcional: sin token, o con uno que no verifique, el anuncio se sirve sin ese campo.
 - Las validaciones de entrada se aplican en el backend (precio no negativo, campos obligatorios,
   email único, formatos, etc.).
 - `PATCH /usuarios/me` es un PATCH: solo se validan y se escriben los campos enviados, y los campos
@@ -266,6 +295,39 @@ las dos bases.
   el `DELETE` borra filtrando por `id_usuario`, así que conocer el id de un anuncio no da acceso a
   la fila de otra persona. Marcar el propio anuncio se rechaza con 400 `VALIDACION` y
   `campo: "anuncio"`, en el mismo orden de comprobaciones que el resto (existe, luego es propio).
+- Un token JWT solo demuestra que la firma es nuestra, no que su usuario siga en la base de datos, y
+  el token vive 7 días. El middleware `autenticar` comprueba que el usuario exista y devuelve 401
+  `USUARIO_NO_EXISTE` si no, de modo que ninguna ruta protegida tenga que hacerlo por su cuenta
+  (`/auth/yo` lo hacía antes, y el resto de rutas fallaba cada una a su manera).
+
+### Decisiones de la I5 (mensajería)
+
+- **Las rutas van repartidas por el recurso al que cuelgan**, igual que en la I4 y por el mismo
+  motivo: `/anuncios/:id/mensajes` en `routes/anuncios.js`, `/conversaciones/:id/mensajes` en el
+  nuevo `routes/conversaciones.js` y la bandeja `GET /usuarios/me/conversaciones` en
+  `routes/usuarios.js`.
+- **`POST /anuncios/:id/mensajes` devuelve `datos.conversacion` y `datos.mensaje`, con 201 si el hilo
+  se acaba de abrir y 200 si ya existía.** La unicidad la impone la restricción `UNIQUE (id_anuncio,
+  id_comprador)` con un `INSERT IGNORE` y el código se lee de `affectedRows`, igual que en los
+  favoritos. `POST /conversaciones/:id/mensajes` solo devuelve `datos.mensaje`: el hilo ya está ahí y
+  el cliente lo pidió por su id.
+- **Un anuncio `vendido` solo bloquea la apertura de un hilo nuevo**, con 400 `VALIDACION` y
+  `campo: "estado"`. Un hilo abierto antes de la venta sigue aceptando mensajes por las dos rutas,
+  porque es justo cuando el comprador necesita hablar con el vendedor (dónde queda, cómo se paga) y
+  porque bloquear solo una de las dos rutas daría dos respuestas distintas para lo mismo.
+- **Leer un hilo marca como leídos los mensajes del otro participante**, y solo los suyos: quien
+  lista es quien "lee". Se marcan todos los pendientes del otro, no solo los de la página devuelta,
+  para que `no_leidos` sea el total real. La bandeja **no** marca nada: abrir la lista no puede vaciar
+  los pendientes.
+- **La bandeja ordena por última actividad** (fecha del último mensaje, con el `id` de desempate
+  porque `fecha` es un `TIMESTAMP` de segundos) y trae el resumen ligero del anuncio, la
+  contraparte con su proyección pública, el último mensaje y `no_leidos`.
+- **`?desde=final` cuenta las páginas desde el final del hilo** para quien está dentro de una
+  conversación y quiere los últimos mensajes. Dentro de la página el orden no cambia: un hilo se lee
+  de más antiguo a más nuevo.
+- **`GET /anuncios/:id` acepta token opcional** (`autenticarSiHayToken`) y añade
+  `conversacion: { id }` solo si quien pregunta participa. Un token ausente, inválido, caducado o de
+  un usuario borrado no es un error en una ruta pública: la petición sigue como anónima.
 
 ### Decisiones de la I4 (favoritos)
 
