@@ -1,0 +1,22 @@
+{
+  "name": "clasify-supabase-backend",
+  "version": "0.1.0",
+  "description": "Capa de servicios de Clasify sobre Supabase (requerimiento adicional de la Práctica 1)",
+  "main": "src/index.js",
+  "scripts": {
+    "db:migrate": "node src/db/migrar.js",
+    "db:limpiar": "node src/db/limpiar.js",
+    "test": "jest --runInBand",
+    "test:cobertura": "jest --runInBand --coverage"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.58.0",
+    "dotenv": "^16.4.7",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

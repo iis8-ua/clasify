@@ -58,6 +58,13 @@ API permite expresar estas reglas de forma explícita siguiendo el diseño clien
 > Nota (requerimiento adicional, 3 puntos): se podría desarrollar además un segundo backend con
 > Supabase en un proyecto aparte. Queda como trabajo opcional para el final y, si se aborda, se
 > documentará con su propio proceso SDD.
+>
+> **Actualizado en la I7:** ese segundo backend se ha implementado en `supabase-backend/`, con su
+> propio SDD en `supabase-backend/docs/`. La conclusión de arriba sigue en pie y es justamente la
+> comparación que hizo el trabajo útil: con servidor propio las reglas se pueden expresar en
+> código, y con Supabase la mayor parte acaba en RLS, porque es la base de datos la que tiene que
+> proteger los datos y no un proceso intermedio. El contraste está en
+> `supabase-backend/docs/ARCHITECTURE.md`.
 
 ## 4. Autenticación y sesión (JWT)
 

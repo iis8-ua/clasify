@@ -32,8 +32,11 @@ ligado a cada anuncio.
 
 Como **requerimiento adicional** se desarrolla un segundo backend con **Supabase**, en un subproyecto
 independiente (`supabase-backend/`), que expone una capa de servicios aislando al cliente del API de
-Supabase. No es necesario para usar el backend propio. **De momento solo tiene el SDD**: el código
-está pendiente de la iteración 7.
+Supabase. No es necesario para usar el backend propio, y no comparte base de datos con `backend/`.
+
+La diferencia de fondo es dónde se aplican las reglas: aquí no hay servidor propio, así que buena
+parte de la lógica vive en la base de datos con RLS y no en código. La capa se implementó en la
+iteración 7; su puesta en marcha está en `supabase-backend/README.md`.
 
 ## Requisitos
 
@@ -113,6 +116,10 @@ Para ver la cobertura: `npm test -- --coverage`.
 │   ├── AI_SUMMARY.md
 │   └── iterations/          SPEC, PLAN y TEST_PLAN de cada iteración
 └── supabase-backend/        Segundo backend (Supabase) con su propio SDD
+    ├── migrations/          SQL de esquema, RLS, trigger y RPC
+    ├── src/services/        Capa de servicios (auth, perfil, anuncios, categorías)
+    ├── tests/               Jest contra el proyecto real de Supabase
+    └── docs/                PROJECT_SPEC, ARCHITECTURE e iteraciones propias
 ```
 
 ## Metodología
