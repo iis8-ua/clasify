@@ -21,7 +21,23 @@ operaciones sobre el recurso principal:
 
 ## Recurso principal
 
-Anuncios (mismos campos que en el backend propio).
+Anuncios. Los mismos campos que en el backend propio, con las diferencias que imponen Postgres y
+Supabase:
+
+| Campo | Backend propio (MySQL) | Aquí (Supabase) |
+|---|---|---|
+| `id` | `INT AUTO_INCREMENT` | `UUID` con `gen_random_uuid()` |
+| `titulo` | `VARCHAR(150)` | `TEXT` con `CHECK` de 1 a 120 |
+| `descripcion` | `TEXT` | `TEXT` |
+| `precio` | `DECIMAL(10,2)` | `NUMERIC(10,2)` |
+| `estado` | `ENUM('disponible','vendido')` | `TEXT` con `CHECK` de esos dos valores |
+| `imagen` | `VARCHAR(255)` | `TEXT` |
+| fecha de alta | `fecha_creacion` `TIMESTAMP` | `created_at` `TIMESTAMPTZ` |
+| `id_autor` | `INT` a `usuarios` | `UUID` a `auth.users` |
+
+El `id` es UUID porque el autor tiene que ser el mismo identificador que da Supabase Auth, para que
+`auth.uid()` y la clave foránea coincidan. La fecha se llama `created_at` porque es la convención de
+PostgREST para las columnas de fecha de alta.
 
 ## Fuera de alcance
 
@@ -29,7 +45,10 @@ Anuncios (mismos campos que en el backend propio).
 - Conversaciones y mensajería (recurso secundario).
 - Subida real de imágenes (la imagen se guarda como URL/nombre).
 - Frontend.
-- Lista negra de tokens (el logout se hace descartando la sesión en el cliente).
+- Lista negra de tokens. El logout llama a `signOut` de Supabase, que revoca el refresh token, pero
+  **no invalida al instante el access token ya emitido**: los JWT son sin estado y siguen valiendo
+  hasta que caducan. Es una limitación de la plataforma, no una decisión de diseño; está detallado
+  en `docs/ARCHITECTURE.md`.
 
 ## Relación con el backend propio
 
