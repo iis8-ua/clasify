@@ -165,4 +165,10 @@ el total.
 
 ## COMMITS RELACIONADOS
 
-- Pendiente. Se rellenará con los hashes después de crear los commits de la iteración.
+- `2e7f05e` - `tarea(supabase)`: migración inicial, proyecto Node y `.env.example`
+- `71d8e40` - `añadir(supabase)`: capa de servicios de auth, perfil, anuncios y categorías
+- `672b401` - `probar(supabase)`: 105 pruebas contra el proyecto real de Supabase
+- `cfa45ec` - `documentar(supabase)`: arquitectura, iteraciones y puesta en marcha
+- `1fb7ac3` - `documentar(docs)`: sitúa I7 en el README raíz y en el diseño
+
+> La convención de commits y el proceso de la iteración están en `CONTRIBUTING.md`.
