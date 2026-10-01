@@ -832,3 +832,150 @@ describe('Conversación en el detalle del anuncio', () => {
     expect(respuesta.body.datos.anuncio.autor).toMatchObject({ id: 1, nombre: 'Ana Ruiz' });
   });
 });
+
+describe('Adelanto del hilo en el detalle del anuncio', () => {
+  test('sin token no sale ni conversacion ni mensajes', async () => {
+    await crearConversacion({ mensajes: ['Hola'] });
+
+    const respuesta = await request(app).get('/clasify_api/anuncios/1');
+
+    expect(respuesta.status).toBe(200);
+    expect(respuesta.body.datos.anuncio.conversacion).toBeUndefined();
+    expect(respuesta.body.datos.anuncio.ultimos_mensajes).toBeUndefined();
+    expect(respuesta.body.datos.anuncio.num_mensajes).toBeUndefined();
+  });
+
+  test('quien no participa del hilo tampoco los ve', async () => {
+    await crearConversacion({ idComprador: 2, mensajes: ['Hola'] });
+
+    // Lucía no es compradora ni vendedora del anuncio 1.
+    const respuesta = await request(app).get('/clasify_api/anuncios/1').set(como(tokenLucia));
+
+    expect(respuesta.status).toBe(200);
+    expect(respuesta.body.datos.anuncio.ultimos_mensajes).toBeUndefined();
+  });
+
+  test('el comprador ve los mensajes del hilo', async () => {
+    await crearConversacion({ idComprador: 2, mensajes: ['Hola', '¿Sigue disponible?'] });
+
+    const respuesta = await request(app).get('/clasify_api/anuncios/1').set(como(tokenCarlos));
+
+    expect(respuesta.status).toBe(200);
+    const { ultimos_mensajes: ultimos, num_mensajes: total } = respuesta.body.datos.anuncio;
+    expect(ultimos.map((m) => m.texto)).toEqual(['Hola', '¿Sigue disponible?']);
+    expect(total).toBe(2);
+    expect(ultimos[0]).toMatchObject({ id_emisor: 2, emisor: { id: 2 } });
+  });
+
+  test('con cinco mensajes salen los tres últimos y el total es cinco', async () => {
+    await crearConversacion({ idComprador: 2, mensajes: ['M1', 'M2', 'M3', 'M4', 'M5'] });
+
+    const respuesta = await request(app).get('/clasify_api/anuncios/1').set(como(tokenCarlos));
+
+    const { ultimos_mensajes: ultimos, num_mensajes: total } = respuesta.body.datos.anuncio;
+    // De más antiguo a más nuevo, como se lee un hilo.
+    expect(ultimos.map((m) => m.texto)).toEqual(['M3', 'M4', 'M5']);
+    expect(total).toBe(5);
+  });
+
+  test('un hilo vacío da la lista vacía y cero mensajes, no un 404', async () => {
+    await crearConversacion({ idComprador: 2, mensajes: [] });
+
+    const respuesta = await request(app).get('/clasify_api/anuncios/1').set(como(tokenCarlos));
+
+    expect(respuesta.status).toBe(200);
+    expect(respuesta.body.datos.anuncio.conversacion).toEqual({ id: expect.any(Number) });
+    expect(respuesta.body.datos.anuncio.ultimos_mensajes).toEqual([]);
+    expect(respuesta.body.datos.anuncio.num_mensajes).toBe(0);
+  });
+
+  test('el vendedor también ve el adelanto de su hilo', async () => {
+    await crearConversacion({ idComprador: 2, mensajes: ['Hola', 'Buenas'] });
+
+    const respuesta = await request(app).get('/clasify_api/anuncios/1').set(como(tokenAna));
+
+    expect(respuesta.body.datos.anuncio.ultimos_mensajes).toHaveLength(2);
+    expect(respuesta.body.datos.anuncio.num_mensajes).toBe(2);
+  });
+
+  test('con varios compradores el vendedor ve su hilo más reciente, no uno al azar', async () => {
+    // Lucía abre un hilo primero y Carlos después, así que el más reciente es el
+    // de Carlos. Los mensajes se insertan con la misma fecha, y el desempate del
+    // `id` de conversación también favours al segundo.
+    const idLucia = await crearConversacion({ idComprador: 3, mensajes: ['De Lucía'] });
+    const idCarlos = await crearConversacion({ idComprador: 2, mensajes: ['De Carlos'] });
+    expect(idCarlos).toBeGreaterThan(idLucia);
+
+    const respuesta = await request(app).get('/clasify_api/anuncios/1').set(como(tokenAna));
+
+    expect(respuesta.body.datos.anuncio.conversacion).toEqual({ id: idCarlos });
+    expect(respuesta.body.datos.anuncio.ultimos_mensajes.map((m) => m.texto)).toEqual(['De Carlos']);
+  });
+
+  test('el comprador solo ve su propio hilo aunque el vendedor tenga varios', async () => {
+    await crearConversacion({ idComprador: 3, mensajes: ['De Lucía'] });
+    await crearConversacion({ idComprador: 2, mensajes: ['De Carlos'] });
+
+    const deCarlos = await request(app).get('/clasify_api/anuncios/1').set(como(tokenCarlos));
+    const deLucia = await request(app).get('/clasify_api/anuncios/1').set(como(tokenLucia));
+
+    expect(deCarlos.body.datos.anuncio.ultimos_mensajes.map((m) => m.texto)).toEqual(['De Carlos']);
+    expect(deLucia.body.datos.anuncio.ultimos_mensajes.map((m) => m.texto)).toEqual(['De Lucía']);
+  });
+
+  test('abrir el detalle NO marca ningún mensaje como leído', async () => {
+    await crearConversacion({ idComprador: 2, mensajes: ['Hola', 'Buenas'] });
+
+    // Se mira el detalle dos veces, que es como lo haría alguien curioseando.
+    await request(app).get('/clasify_api/anuncios/1').set(como(tokenAna));
+    const respuesta = await request(app).get('/clasify_api/anuncios/1').set(como(tokenAna));
+
+    expect(respuesta.status).toBe(200);
+
+    const mensajes = await ejecutar('SELECT leido FROM mensajes WHERE id_conversacion = ?', [
+      respuesta.body.datos.anuncio.conversacion.id
+    ]);
+    expect(mensajes.map((m) => m.leido)).toEqual([0, 0]);
+  });
+
+  test('la bandeja sigue con los pendientes intactos tras mirar el detalle', async () => {
+    await crearConversacion({ idComprador: 2, mensajes: ['Hola', 'Buenas'] });
+
+    await request(app).get('/clasify_api/anuncios/1').set(como(tokenAna));
+
+    const bandeja = await request(app).get('/clasify_api/usuarios/me/conversaciones').set(como(tokenAna));
+    expect(bandeja.body.datos[0].no_leidos).toBe(2);
+  });
+
+  test('el preview no filtra a un tercero ni aunque conozca el id del hilo', async () => {
+    const idConversacion = await crearConversacion({ idComprador: 2, mensajes: ['Secreto'] });
+
+    const detalle = await request(app).get('/clasify_api/anuncios/1').set(como(tokenLucia));
+    expect(detalle.body.datos.anuncio.ultimos_mensajes).toBeUndefined();
+
+    // Y el hilo completo sigue protegido, como en la I5.
+    const hilo = await request(app)
+      .get(`/clasify_api/conversaciones/${idConversacion}/mensajes`)
+      .set(como(tokenLucia));
+    expect(hilo.status).toBe(403);
+  });
+
+  test('el detalle de un anuncio sin hilos no lleva ninguna de las tres claves', async () => {
+    const respuesta = await request(app).get('/clasify_api/anuncios/1').set(como(tokenCarlos));
+
+    expect(respuesta.body.datos.anuncio.conversacion).toBeUndefined();
+    expect(respuesta.body.datos.anuncio.ultimos_mensajes).toBeUndefined();
+    expect(respuesta.body.datos.anuncio.num_mensajes).toBeUndefined();
+  });
+
+  test('un token inválido deja el detalle público, sin preview', async () => {
+    await crearConversacion({ idComprador: 2, mensajes: ['Hola'] });
+
+    const respuesta = await request(app)
+      .get('/clasify_api/anuncios/1')
+      .set({ Authorization: 'Bearer basura' });
+
+    expect(respuesta.status).toBe(200);
+    expect(respuesta.body.datos.anuncio.ultimos_mensajes).toBeUndefined();
+  });
+});

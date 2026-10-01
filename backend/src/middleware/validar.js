@@ -356,6 +356,57 @@ function validarDesde(query = {}) {
   return desde;
 }
 
+/* ------------------------------------------------------------------ */
+/* Valoraciones                                                         */
+/* ------------------------------------------------------------------ */
+
+const PUNTUACION_MINIMA = 1;
+const PUNTUACION_MAXIMA = 5;
+const LONGITUD_MAXIMA_COMENTARIO = 500;
+
+/**
+ * Cuerpo de `PUT /usuarios/:id/valoracion`.
+ *
+ * La puntuación tiene que ser un entero de 1 a 5 y nada más. Se rechazan tanto
+ * los `3.5` como los `"3"` en texto porque la columna es `TINYINT UNSIGNED`: si
+ * pasara un 3.5, MySQL redondearía en silencio y devolvería una valoración que
+ * nadie escribió.
+ *
+ * El comentario es opcional y se guarda como `null` si no viene o viene vacío,
+ * para que "sin comentario" no se confunda con "comentario en blanco".
+ */
+function validarValoracion(cuerpo = {}) {
+  const puntuacion = cuerpo.puntuacion;
+
+  if (!Number.isInteger(puntuacion)) {
+    throw ApiError.validacion('La puntuación es obligatoria y tiene que ser un número entero', 'puntuacion');
+  }
+  if (puntuacion < PUNTUACION_MINIMA || puntuacion > PUNTUACION_MAXIMA) {
+    throw ApiError.validacion(
+      `La puntuación debe estar entre ${PUNTUACION_MINIMA} y ${PUNTUACION_MAXIMA}`,
+      'puntuacion'
+    );
+  }
+
+  let comentario = null;
+  if (cuerpo.comentario !== undefined && cuerpo.comentario !== null) {
+    if (typeof cuerpo.comentario !== 'string') {
+      throw ApiError.validacion('El comentario tiene que ser texto', 'comentario');
+    }
+
+    const recortado = cuerpo.comentario.trim();
+    if (recortado.length > LONGITUD_MAXIMA_COMENTARIO) {
+      throw ApiError.validacion(
+        `El comentario no puede superar los ${LONGITUD_MAXIMA_COMENTARIO} caracteres`,
+        'comentario'
+      );
+    }
+    comentario = recortado || null;
+  }
+
+  return { puntuacion, comentario };
+}
+
 module.exports = {
   validarRegistro,
   validarLogin,
@@ -366,5 +417,6 @@ module.exports = {
   validarFiltrosAnuncios,
   validarMensaje,
   validarDesde,
+  validarValoracion,
   validarId
 };

@@ -82,3 +82,26 @@ CREATE TABLE IF NOT EXISTS mensajes (
   CONSTRAINT fk_mensajes_emisor
     FOREIGN KEY (id_emisor) REFERENCES usuarios (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Un usuario valora a otro una sola vez; si repite, la fila se sobrescribe. Las dos
+-- claves foráneas van en CASCADE para que al borrar un usuario se borren las
+-- valoraciones que dio y las que recibió, sin dejar filas colgando.
+--
+-- El CHECK sobre la puntuación es una red de seguridad, no la validación de la API:
+-- `validar.js` ya rechaza lo que no sea un entero de 1 a 5 con un 400, y un CHECK
+-- violado sería un 500. MySQL solo aplica los CHECK a partir de la 8.0.16.
+CREATE TABLE IF NOT EXISTS valoraciones (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  puntuacion   TINYINT UNSIGNED NOT NULL,
+  comentario   VARCHAR(500) NULL,
+  fecha        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id_valorador INT UNSIGNED NOT NULL,
+  id_valorado  INT UNSIGNED NOT NULL,
+  UNIQUE KEY uq_valoraciones_usuarios (id_valorador, id_valorado),
+  KEY idx_valoraciones_valorado (id_valorado),
+  CONSTRAINT ck_valoraciones_puntuacion CHECK (puntuacion BETWEEN 1 AND 5),
+  CONSTRAINT fk_valoraciones_valorador
+    FOREIGN KEY (id_valorador) REFERENCES usuarios (id) ON DELETE CASCADE,
+  CONSTRAINT fk_valoraciones_valorado
+    FOREIGN KEY (id_valorado) REFERENCES usuarios (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

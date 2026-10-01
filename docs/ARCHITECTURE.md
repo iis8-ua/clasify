@@ -82,6 +82,22 @@ Campos:
 - id_conversacion # conversación a la que pertenece (N:1 con Conversaciones)
 - id_emisor # usuario que envía el mensaje (N:1 con Usuarios)
 
+### Valoraciones
+
+Campos:
+
+- id
+- puntuación # entero del 1 al 5
+- comentario # texto opcional de hasta 500 caracteres
+- fecha (fecha)
+- id_valorador # quién valora (N:1 con Usuarios)
+- id_valorado # quién recibe la valoración (N:1 con Usuarios)
+
+`UNIQUE (id_valorador, id_valorado)`: un usuario valora a otro como mucho una vez, y volver a
+valorar edita la fila en lugar de crear otra. Las dos claves foráneas van con `ON DELETE CASCADE`, de
+modo que al borrar un usuario se van sus valoraciones dadas y recibidas sin tocar nada a mano. Hay un
+índice por `id_valorado`, que es el que usa el resumen y el listado de lo que ha recibido.
+
 ### Convenciones de MySQL
 
 - Todos los `id` son `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`
@@ -120,15 +136,19 @@ petición requiere un token válido.
 | GET | `/auth/yo` | JWT | Usuario del token. Sirve para comprobar que el middleware acepta un token válido |
 | GET | `/usuarios/me` | JWT | Perfil propio (incluye email) |
 | PATCH | `/usuarios/me` | JWT | Editar nombre / biografía / contraseña |
-| GET | `/usuarios/:id` | - | Perfil público (sin email) |
+| GET | `/usuarios/:id` | JWT opcional | Perfil público (sin email), con `mi_valoracion` si el token ya ha valorado a ese usuario |
 | GET | `/usuarios/:id/anuncios` | - | Anuncios publicados por el usuario (paginado) |
 | GET | `/usuarios/me/anuncios` | JWT | Anuncios publicados por el usuario autenticado (paginado) |
 | GET | `/usuarios/me/favoritos` | JWT | Anuncios guardados por el usuario autenticado (paginado) |
 | GET | `/usuarios/me/conversaciones` | JWT | Conversaciones activas del usuario autenticado (paginado) |
+| PUT | `/usuarios/:id/valoracion` | JWT | Crea o edita la valoración sobre ese usuario. 201 si es nueva, 200 si ya existía |
+| DELETE | `/usuarios/:id/valoracion` | JWT | Borra mi valoración sobre ese usuario. 404 si no había ninguna |
+| GET | `/usuarios/:id/valoraciones` | - | Valoraciones que ha recibido ese usuario (paginado) |
+| GET | `/usuarios/me/valoraciones` | JWT | Valoraciones que he puesto yo (paginado) |
 | GET | `/categorias` | - | Listado de categorías para los filtros (sin paginar) |
 | GET | `/anuncios` | - | Listado con búsqueda por texto, filtro por categoría y ordenación por fecha o precio (paginado) |
 | POST | `/anuncios` | JWT | Creación de un anuncio (`multipart/form-data` con campos + `imagen` opcional) |
-| GET | `/anuncios/:id` | - | Detalle + autor + categoría + `num_favoritos` (+ conversación si es participante) |
+| GET | `/anuncios/:id` | JWT opcional | Detalle + autor + categoría + `num_favoritos` (+ `conversacion`, `ultimos_mensajes` y `num_mensajes` si el token participa en un hilo del anuncio) |
 | PATCH | `/anuncios/:id` | JWT (autor) | Edición de un anuncio (multipart opcional para la imagen) |
 | PATCH | `/anuncios/:id/estado` | JWT (autor) | Cambio de estado disponible / vendido |
 | DELETE | `/anuncios/:id` | JWT (autor) | Eliminación de un anuncio |
@@ -283,9 +303,26 @@ las dos bases.
   `password_hash`.
 - El detalle de un anuncio devuelve `autor`, `categoria` y `num_favoritos`. `num_favoritos` sale de
   un `COUNT` sobre `favoritos`. Si quien lo pide es participante de alguna conversación de ese anuncio,
-  el detalle añade además `conversacion: { id }`, para que el cliente sepa si ya hay un hilo abierto
-  sin tener que escribir un mensaje para averiguarlo. La ruta es pública, así que el token es
-  opcional: sin token, o con uno que no verifique, el anuncio se sirve sin ese campo.
+  el detalle añade además `conversacion: { id }`, `ultimos_mensajes` con los tres últimos mensajes
+  del hilo y `num_mensajes` con el total, para que el cliente sepa si ya hay un hilo abierto y qué
+  se ha dicho en él sin tener que escribir un mensaje ni hacer una llamada aparte. Un comprador
+  tiene como mucho un hilo con un anuncio, pero el vendedor puede tener varios: para él se
+  enseña el más reciente, ordenando por `fecha_creacion` y, a igualdad de fecha, por `id`
+  descendente. La ruta es pública, así que el token es opcional: sin token, con uno que no
+  verifique, o con el de alguien que no participa, el anuncio se sirve sin esos tres campos.
+  Ver el detalle **no** marca ningún mensaje como leío: `leido` solo cambia cuando se lee el
+  hilo por `GET /anuncios/:id/mensajes` o `GET /conversaciones/:id/mensajes`.
+- Las valoraciones son siempre del usuario del token, y solo se pueden crear o borrar sobre otro
+  usuario: valerse a uno mismo se rechaza con 400 `VALIDACION` y `campo: "usuario"`, igual que
+  marcar el propio anuncio como favorito. `GET /usuarios/:id/valoraciones` es pública porque el
+  enunciado pide poder ver la reputación de un vendedor; lo que no sale nunca es el email de quien
+  valoró.
+- `valoracion_media` sale como **número** en el JSON, no como el texto que devuelve el driver.
+  `AVG` de una columna entera es un DECIMAL en MySQL y `mysql2` serializa los DECIMAL como texto,
+  igual que hace con `precio`. Aquí sí cambia, a propósito: `precio` es dinero y el texto evita
+  perder precisión, mientras que una media de 1 a 5 con dos decimales no tiene precisión que
+  perder y quien la consume la quiere comparar, ordenar y pintar como estrellas. Se convierte con
+  `Number(...)` al serializar.
 - Las validaciones de entrada se aplican en el backend (precio no negativo, campos obligatorios,
   email único, formatos, etc.).
 - `PATCH /usuarios/me` es un PATCH: solo se validan y se escriben los campos enviados, y los campos
@@ -328,6 +365,47 @@ las dos bases.
 - **`GET /anuncios/:id` acepta token opcional** (`autenticarSiHayToken`) y añade
   `conversacion: { id }` solo si quien pregunta participa. Un token ausente, inválido, caducado o de
   un usuario borrado no es un error en una ruta pública: la petición sigue como anónima.
+
+### Decisiones de la I6 (valoraciones)
+
+- **Las rutas cuelgan de `routes/usuarios.js`**, con el nombre en singular para la acción y en plural
+  para el listado: `PUT`/`DELETE /usuarios/:id/valoracion` y `GET /usuarios/:id/valoraciones`, más
+  `GET /usuarios/me/valoraciones`. `/me/valoraciones` se registra **antes** que
+  `/:id/valoraciones`, porque en Express el orden de registro manda y si no, `/me` se come el
+  `/:id`.
+- **Valorar es `PUT` y no `POST`.** Repetir la misma acción es actualizar, no crear, y el cliente
+  puede repetir la llamada sin miedo. El `201` del primer alta y el `200` de las siguientes lo dice
+  el propio servicio con un campo `nuevo`, no el cliente tiene que preguntar antes.
+- **El alta y la edición se resuelven con `INSERT IGNORE` y, solo si dio 0, un `UPDATE`.** Se
+  descartó `ON DUPLICATE KEY UPDATE`, que sería lo natural en una sola sentencia, porque devuelve
+  `affectedRows` 1 tanto al insertar como al actualizar con los mismos valores, así que no permite
+  distinguir el 201 del 200. Comprobado contra el MySQL 8.0.46 de la máquina. El `UPDATE` va con
+  `WHERE id_valorador = ? AND id_valorado = ?`, no con el `id` de la valoración, para que el borrado
+  en cascada de un usuario no deje el `UPDATE` escribiendo sobre una fila que ya no existe.
+- **`INSERT IGNORE` se traga los errores, y eso es un riesgo asumido.** Se traga también una
+  violación del `CHECK` de la puntuación. No puede colar un 7 porque la validación de la capa de
+  entrada ya lo ha rechazado con un 400, pero si algún día alguien salta esa capa la fila no entra y
+  el `UPDATE` posterior falla, así que el error sale igualmente.
+- **La puntuación se valida en el middleware, no en el esquema.** El `CHECK` es la red de seguridad
+  final, no la respuesta: un `CHECK` violado sería un 500 desde el manejador central de errores, y lo
+  que tiene que contestar la API es un 400 con el nombre del campo. El `CHECK` solo se cumple a
+  partir de MySQL 8.0.16, que ya es la versión mínima del proyecto.
+- **El resumen va en la misma consulta que el perfil**, con dos subconsultas correlacionadas por
+  `id_valorado` en lugar de un `AVG` con `GROUP BY`: así la fila del usuario y su resumen salen
+  siempre juntas y no puede aparecer un resumen sin dueño. Sin ninguna valoración la media es
+  `null` y el recuento 0, porque el 0 significaría a la vez "nadie me ha valorado" y "mi media es
+  cero", y no es lo mismo.
+- **`mi_valoracion` va dentro de `GET /usuarios/:id` con token opcional**, y no en una llamada
+  aparte, porque el frontend ya está cargando ese perfil. Solo se devuelve sobre el perfil del otro:
+  sobre el propio ya viene todo en `PATCH`/`GET /usuarios/me`.
+- **`GET /usuarios/:id` pasa a llevar token opcional** (`autenticarSiHayToken`), igual que el detalle
+  del anuncio desde la I5. No rompe a quien ya la llamaba sin token: el middleware solo borra
+  `req.usuario` cuando el token no verifica, así que la respuesta sin token es idéntica a la
+  anterior.
+- **`ultimos_mensajes` enseña los tres últimos mensajes, de más antiguo a más nuevo.** Es el orden
+  en que se lee un hilo; devolverlos del revés obliga al frontend a invertir el array para pintar.
+  `num_mensajes` va aparte para que el cliente sepa que hay más sin tener que paginar para
+  enterarse.
 
 ### Decisiones de la I4 (favoritos)
 

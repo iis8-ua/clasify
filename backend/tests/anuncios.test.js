@@ -460,7 +460,9 @@ describe('GET /clasify_api/anuncios/:id', () => {
       id: 1,
       nombre: 'Ana Ruiz',
       biografia: null,
-      fecha_alta: expect.any(String)
+      fecha_alta: expect.any(String),
+      valoracion_media: null,
+      num_valoraciones: 0
     });
     expect(anuncio.categoria).toEqual({ id: 1, nombre: 'Electrónica' });
   });

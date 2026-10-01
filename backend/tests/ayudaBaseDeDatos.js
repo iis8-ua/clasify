@@ -32,7 +32,18 @@ async function limpiarTablas() {
 
   try {
     await conexion.query('SET FOREIGN_KEY_CHECKS = 0');
-    for (const tabla of ['mensajes', 'conversaciones', 'favoritos', 'anuncios', 'usuarios', 'categorias']) {
+    // La lista está escrita a mano, así que **cada tabla nueva tiene que añadirse
+    // aquí**. Si se olvida, sus filas se cuelan de un test al siguiente y la suite
+    // pasa con datos de otro test, que es la forma más difícil de detectar que hay.
+    for (const tabla of [
+      'valoraciones',
+      'mensajes',
+      'conversaciones',
+      'favoritos',
+      'anuncios',
+      'usuarios',
+      'categorias'
+    ]) {
       await conexion.query(`TRUNCATE TABLE ${tabla}`);
     }
     await conexion.query('SET FOREIGN_KEY_CHECKS = 1');

@@ -30,9 +30,10 @@ ligado a cada anuncio.
 | Ficheros | `multer` |
 | Pruebas | Jest + Supertest |
 
-Como **requerimiento adicional** se incluye un segundo backend con **Supabase**, en un subproyecto
+Como **requerimiento adicional** se desarrolla un segundo backend con **Supabase**, en un subproyecto
 independiente (`supabase-backend/`), que expone una capa de servicios aislando al cliente del API de
-Supabase. No es necesario para usar el backend propio.
+Supabase. No es necesario para usar el backend propio. **De momento solo tiene el SDD**: el código
+está pendiente de la iteración 7.
 
 ## Requisitos
 
@@ -83,7 +84,7 @@ cd backend
 npm test
 ```
 
-Son 234 pruebas de Jest + Supertest que hacen peticiones HTTP reales contra la API. Antes de
+Son 297 pruebas de Jest + Supertest que hacen peticiones HTTP reales contra la API. Antes de
 cada prueba se ejecuta el esquema sobre `DB_TEST_NAME` y se vacían las tablas, así que la base
 de desarrollo no se toca y no hace falta limpiarla a mano. La configuración del JWT de las
 pruebas está aparte en `backend/tests/prepararEntorno.js`.
@@ -123,6 +124,9 @@ historial de git refleja el proceso, con un commit de cierre por iteración y un
 
 ## Fuera de alcance
 
-Pagos reales, valoración de vendedores, envío/logística y moderación automática de contenido.
+Pagos reales, envío/logística, moderación automática de contenido y moderación de las
+valoraciones (reportar, ocultar o borrar una valoración). Las valoraciones entre usuarios **sí**
+entran en el alcance: puntuación del 1 al 5 y comentario opcional, con la media resumida en el
+perfil público y junto al autor de cada anuncio.
 
 ---

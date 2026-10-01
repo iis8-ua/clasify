@@ -6,6 +6,9 @@ const { leerPaginacion, respuestaPaginada, totalDe } = require('../helpers/pagin
 /** Valor de `?desde=` que devuelve la página de los últimos mensajes. */
 const DESDE_FINAL = 'final';
 
+/** Cuántos mensajes se adelantan en el detalle del anuncio. */
+const CANTIDAD_ULTIMOS = 3;
+
 function mensajeDesdeFila(fila) {
   return {
     id: fila.id,
@@ -104,4 +107,55 @@ async function listar(conversacion, idUsuario, paginacion, opciones = {}) {
   return respuestaPaginada(mensajes, { pagina, limite }, total);
 }
 
-module.exports = { enviar, listar };
+/**
+ * Los últimos mensajes de una conversación para el detalle del anuncio, del más
+ * antiguo al más nuevo dentro del trozo.
+ *
+ * Tres diferencias con `listar`, y las tres son a propósito:
+ *
+ *   * No marca nada como leído. El detalle de un anuncio es público y se abre sin
+ *     querer mucho, así que si marcara, con solo entrar en la ficha se vaciaría
+ *     el contador de la bandeja. Quien abra el aviso tiene que hacerlo con el
+ *     `GET` del hilo, que es el gesto deliberado.
+ *   * No pagina. Es un adelanto de contexto, no el hilo.
+ *   * Solo se llama si quien pregunta participa del hilo, que comprueba la ruta.
+ *
+ * El `ORDER BY fecha DESC` con el `LIMIT` se hace sobre el orden inverso y luego se
+ * da la vuelta, porque `LIMIT` sin `ORDER BY` no garantiza nada y con el orden
+ * bueno MySQL no sabe qué filas son "las últimas" hasta haberlas leído todas.
+ */
+async function ultimos(conversacion, cantidad = CANTIDAD_ULTIMOS) {
+  if (!conversacion) {
+    return [];
+  }
+
+  const filas = await consultar(
+    `SELECT ${COLUMNAS_MENSAJE}
+       FROM mensajes
+      WHERE id_conversacion = ?
+      ORDER BY fecha DESC, id DESC
+      LIMIT ?`,
+    [conversacion.id, cantidad]
+  );
+
+  return filas.reverse().map((fila) => ({
+    ...mensajeDesdeFila(fila),
+    emisor: { id: fila.id_emisor }
+  }));
+}
+
+/** Número total de mensajes de una conversación, para el detalle del anuncio. */
+async function contar(conversacion) {
+  if (!conversacion) {
+    return 0;
+  }
+
+  const conteo = await consultar(
+    'SELECT COUNT(*) AS total FROM mensajes WHERE id_conversacion = ?',
+    [conversacion.id]
+  );
+
+  return totalDe(conteo);
+}
+
+module.exports = { enviar, listar, ultimos, contar, CANTIDAD_ULTIMOS };

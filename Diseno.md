@@ -16,8 +16,14 @@ cuando ya no desee ofrecerlos. También puede guardar como favoritos los anuncio
 y contactar con el vendedor a través de un sistema de mensajería interno ligado a cada anuncio
 (de esta forma la conversación queda asociada al producto y es privada entre comprador y vendedor).
 
-Quedan fuera del alcance de esta primera versión: el sistema real de pagos, la valoración de
-vendedores, el sistema de envío/logística y la moderación automática de contenido.
+Los usuarios pueden valorarse entre sí con una puntuación del 1 al 5 y un comentario opcional. La
+valoración se resume como media y número de valoraciones en el perfil público y junto al autor de
+cada anuncio, que es donde un comprador decide si escribe o no. El detalle del anuncio devuelve
+además los tres últimos mensajes del hilo cuando quien consulta participa en él.
+
+Quedan fuera del alcance de esta versión: el sistema real de pagos, el sistema de envío/logística,
+la moderación automática de contenido y la moderación de las valoraciones (reportar, ocultar o
+borrar una valoración).
 
 ## 2. Funcionalidades del frontend
 
@@ -34,6 +40,9 @@ vendedores, el sistema de envío/logística y la moderación automática de cont
   lista de favoritos.
 - Un usuario autenticado puede iniciar una conversación privada con el vendedor de un anuncio,
   responder dentro de esa conversación y consultar sus conversaciones activas (solo las suyas).
+- Un usuario autenticado puede valorar a cualquier otro usuario (no a sí mismo) con una puntuación
+  del 1 al 5 y un comentario opcional, editar esa valoración o borrarla. Cualquier visitante puede
+  ver la lista y la media de las valoraciones que ha recibido un usuario.
 
 ## 3. Tipo de backend
 
@@ -109,7 +118,18 @@ Conversacion: id, fecha_creacion
 Mensaje: id, texto, fecha, leido
     conversacion -> Conversacion (N:1)
     emisor       -> Usuario      (N:1)
+
+Valoración: id, puntuacion (1..5), comentario (opcional), fecha
+    valorador -> Usuario (N:1)                  # quién valora
+    valorado -> Usuario (N:1)                  # quién recibe la valoración
+    RESTRICCIÓN: UNIQUE (valorador, valorado)  # una valoración por pareja
+    RESTRICCIÓN: CHECK (puntuacion BETWEEN 1 AND 5)
 ```
+
+`Valoración` cuelga de **usuario a usuario y no del anuncio**: se puntúa a la persona, no a la
+operación, así que la reputación sobrevive a que el anuncio se venda o se borre. Las dos claves
+foráneas van con `ON DELETE CASCADE`, de modo que al borrar un usuario se van sus valoraciones
+dadas y recibidas. Volver a valorar el mismo par edita la fila existente en lugar de crear otra.
 
 **Participantes de una conversación** = autor del anuncio (vendedor) ∪ conversacion.comprador.
 Es la única regla de acceso a la mensajería y se resuelve con un `JOIN` de una sola condición.
@@ -137,6 +157,9 @@ según `docs/ARCHITECTURE.md`.
 | Anuncio | editar / cambiar estado / eliminar | solo el autor |
 | Favorito | crear/eliminar/listar | solo el usuario autenticado sobre los suyos |
 | Conversación | leer/escribir mensajes | solo vendedor y comprador de esa conversación |
+| Valoración | crear/editar/borrar | solo el usuario autenticado, sobre otro distinto de él |
+| Valoración | ver las que ha recibido un usuario | cualquiera |
+| Valoración | ver las que he puesto yo | solo el usuario autenticado |
 
 Validaciones principales:
 
@@ -165,16 +188,21 @@ Todas las rutas empiezan por `/clasify_api/`. `JWT` indica que requiere token.
 | GET | `/usuarios/me/anuncios` | JWT | Mis anuncios (paginado) |
 | GET | `/usuarios/me/favoritos` | JWT | Mis favoritos (paginado) |
 | GET | `/usuarios/me/conversaciones` | JWT | Mis conversaciones activas (paginado) |
+| GET | `/usuarios/:id` | JWT opcional | Perfil público con media de valoración, y `mi_valoracion` si el token ya ha valorado |
 | GET | `/categorias` | - | Listado de categorías para los filtros |
 | GET | `/anuncios` | - | Listado/búsqueda (texto, categoría, orden) paginado |
 | POST | `/anuncios` | JWT | Crear anuncio (`multipart/form-data` con campos + `imagen`) |
-| GET | `/anuncios/:id` | - | Detalle + autor + categoría + `num_favoritos` (+ conversación si es participante) |
+| GET | `/anuncios/:id` | JWT opcional | Detalle + autor + categoría + `num_favoritos` (+ `conversacion`, `ultimos_mensajes` y `num_mensajes` si participa en un hilo) |
 | PATCH | `/anuncios/:id` | JWT (autor) | Editar anuncio (multipart opcional para cambiar la imagen) |
 | PATCH | `/anuncios/:id/estado` | JWT (autor) | Cambiar estado disponible/vendido |
 | DELETE | `/anuncios/:id` | JWT (autor) | Eliminar anuncio |
 | GET | `/clasify_api/uploads/:fichero` | - | Sirve una imagen subida |
 | POST | `/anuncios/:id/favorito` | JWT | Añadir a favoritos (idempotente). 201 si es nuevo, 200 si ya estaba |
 | DELETE | `/anuncios/:id/favorito` | JWT | Quitar de favoritos |
+| PUT | `/usuarios/:id/valoracion` | JWT | Crear o editar mi valoración sobre ese usuario. 201 nueva, 200 si ya existía |
+| DELETE | `/usuarios/:id/valoracion` | JWT | Borrar mi valoración. 404 si no había ninguna |
+| GET | `/usuarios/:id/valoraciones` | - | Valoraciones que ha recibido ese usuario (paginado) |
+| GET | `/usuarios/me/valoraciones` | JWT | Valoraciones que he puesto yo (paginado) |
 | GET | `/anuncios/:id/mensajes` | JWT (comprador) | Mensajes de **mi** conversación con el vendedor (paginado). 400 si lo pide el vendedor |
 | POST | `/anuncios/:id/mensajes` | JWT | Inicia (o reutiliza) la conversación con el vendedor y envía el mensaje |
 | GET | `/conversaciones/:id/mensajes` | JWT (participante) | Mensajes de una conversación (paginado) |
@@ -193,8 +221,9 @@ GET /clasify_api/anuncios?texto=mesa&categoria=3&orden=precio_asc&pagina=1&limit
 ```
 
 El endpoint `GET /anuncios/:id` devuelve el anuncio junto con sus recursos relacionados
-(autor, categoría, `num_favoritos` y, si el usuario es participante, la conversación),
-satisfaciendo el requisito de "elemento + recurso secundario".
+(autor con su valoración media, categoría, `num_favoritos` y, si el usuario es participante, la
+conversación con sus tres últimos mensajes y el total de mensajes), satisfaciendo el requisito de
+"elemento + recurso secundario".
 
 ### Subida de imágenes
 
@@ -224,13 +253,18 @@ PLAN y TEST_PLAN en `docs/iterations/`.
 - **I5 – Mensajería (recurso secundario)**
   Entidad `Conversacion`, iniciar/reutilizar conversación, enviar y listar mensajes, autorización
   por participante, marcar como leído.
-- **I6 – Cierre**
-  Revisión de validaciones y casos límite, pruebas de regresión, README de ejecución y
-  documentación final coherente con la implementación.
-- **I7–I9 – Segundo backend (Supabase)** *(requerimiento adicional, proyecto `supabase-backend/`)*
+- **I6 – Valoraciones (recurso secundario)**
+  Entidad `Valoración`, alta editable y editable, borrado, listado público de lo que ha recibido
+  un usuario y listado de lo que he puesto yo. Media y recuento en el perfil público, en el propio y
+  en el autor del anuncio, con `mi_valoracion` en el perfil. De paso, el detalle del anuncio pasa a
+  devolver los tres últimos mensajes del hilo y su total.
+- **I7 – Segundo backend (Supabase)** *(requerimiento adicional, proyecto `supabase-backend/`)*
   Proyecto totalmente aparte con su propio SDD en `supabase-backend/docs/`: capa de servicios que
   aísla Supabase, autenticación y registro de usuarios y operaciones sobre el recurso principal
   (anuncios). Sin CRUD secundario.
+- **I8 – Cierre**
+  Revisión de validaciones y casos límite, pruebas de regresión, README de ejecución y
+  documentación final coherente con la implementación.
 
 ## 11. Estrategia de pruebas
 
