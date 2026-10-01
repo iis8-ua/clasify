@@ -5,7 +5,6 @@ const { Router } = express;
 const authService = require('../services/authService');
 const { autenticar } = require('../middleware/auth');
 const { validarRegistro, validarLogin } = require('../middleware/validar');
-const { ApiError } = require('../errors/ApiError');
 
 const router = Router();
 
@@ -32,10 +31,9 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/yo', autenticar, async (req, res) => {
+  // El 401 USUARIO_NO_EXISTE lo pone ya el middleware `autenticar`, así que aquí
+  // el usuario existe seguro y no hace falta volver a comprobarlo.
   const usuario = await authService.buscarPorId(req.usuario.id);
-  if (!usuario) {
-    throw ApiError.noAutorizado('USUARIO_NO_EXISTE', 'El usuario del token ya no existe');
-  }
   res.status(200).json({ datos: { usuario: authService.projectionPrivada(usuario) } });
 });
 

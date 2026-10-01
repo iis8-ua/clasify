@@ -2,7 +2,7 @@
 
 const request = require('supertest');
 const app = require('../src/app');
-const { pool } = require('../src/db/pool');
+const { pool, ejecutar } = require('../src/db/pool');
 const { prepararBaseDePruebas, limpiarTablas } = require('./ayudaBaseDeDatos');
 
 const EMAIL_VALIDO = 'nuevo@example.com';
@@ -149,6 +149,61 @@ describe('Middleware de autenticación', () => {
 
     expect(respuesta.status).toBe(401);
     expect(respuesta.body.error.codigo).toBe('TOKEN_CADUCADO');
+  });
+
+  // El token sigue siendo criptográficamente válido después de borrar al usuario,
+  // y vive 7 días. Sin esta comprobación cada ruta protegida se equivocaba por su
+  // cuenta: /usuarios/me devolvía 200 con el usuario a null, /usuarios/me/anuncios
+  // reventaba con un 500 y las escrituras fallaban con un error de clave foránea.
+  describe('con un token bien firmado cuyo usuario ya no existe', () => {
+    let tokenBorrado;
+
+    beforeEach(async () => {
+      const registro = await request(app)
+        .post('/clasify_api/auth/register')
+        .send({ email: EMAIL_VALIDO, nombre: 'Borrada', password: CONTRASENA_VALIDA });
+      tokenBorrado = registro.body.datos.token;
+      // `limpiarTablas` hace TRUNCATE, así que el usuario registrado es el id 1.
+      // El DELETE no reinicia el AUTO_INCREMENT (solo el TRUNCATE lo hace), y
+      // hace falta reiniciarlo a mano para que la prueba de abajo, que vuelve a
+      // registrar al mismo usuario, recupere el id 1.
+      await ejecutar('DELETE FROM usuarios WHERE id = 1');
+      await ejecutar('ALTER TABLE usuarios AUTO_INCREMENT = 1');
+    });
+
+    // Todas las filas tienen cuatro columnas: la cuarta es el cuerpo, o `null` si
+    // la petición no lleva ninguno. Con una celda de menos, Jest añadiría su
+    // callback `done` como último argumento y acabaría en el `.send()`.
+    test.each([
+      ['GET /auth/yo', 'get', '/clasify_api/auth/yo', null],
+      ['GET /usuarios/me', 'get', '/clasify_api/usuarios/me', null],
+      ['PATCH /usuarios/me', 'patch', '/clasify_api/usuarios/me', { nombre: 'Nuevo' }],
+      ['GET /usuarios/me/anuncios', 'get', '/clasify_api/usuarios/me/anuncios', null],
+      ['GET /usuarios/me/favoritos', 'get', '/clasify_api/usuarios/me/favoritos', null],
+      ['POST /anuncios', 'post', '/clasify_api/anuncios', { titulo: 'X', descripcion: 'y', precio: 1, categoria: 1 }],
+      ['POST /anuncios/1/favorito', 'post', '/clasify_api/anuncios/1/favorito', null],
+      ['PATCH /anuncios/1', 'patch', '/clasify_api/anuncios/1', { precio: 1 }],
+      ['DELETE /anuncios/1', 'delete', '/clasify_api/anuncios/1', null]
+    ])('%s devuelve 401 USUARIO_NO_EXISTE', async (_caso, metodo, ruta, cuerpo) => {
+      const peticion = request(app)[metodo](ruta).set('Authorization', `Bearer ${tokenBorrado}`);
+      const respuesta = cuerpo === null ? await peticion : await peticion.send(cuerpo);
+
+      expect(respuesta.status).toBe(401);
+      expect(respuesta.body.error.codigo).toBe('USUARIO_NO_EXISTE');
+    });
+
+    test('el mismo token vale en cuanto el usuario vuelve a existir', async () => {
+      await request(app)
+        .post('/clasify_api/auth/register')
+        .send({ email: EMAIL_VALIDO, nombre: 'Borrada', password: CONTRASENA_VALIDA });
+
+      const respuesta = await request(app)
+        .get('/clasify_api/auth/yo')
+        .set('Authorization', `Bearer ${tokenBorrado}`);
+
+      expect(respuesta.status).toBe(200);
+      expect(respuesta.body.datos.usuario.email).toBe(EMAIL_VALIDO);
+    });
   });
 });
 

@@ -4,6 +4,7 @@ const express = require('express');
 const { Router } = express;
 const usuarioService = require('../services/usuarioService');
 const favoritoService = require('../services/favoritoService');
+const conversacionService = require('../services/conversacionService');
 const { autenticar } = require('../middleware/auth');
 const { leerPaginacion } = require('../helpers/paginacion');
 const { validarActualizacionPerfil, validarId } = require('../middleware/validar');
@@ -29,6 +30,10 @@ router.get('/me/anuncios', autenticar, async (req, res) => {
 
 router.get('/me/favoritos', autenticar, async (req, res) => {
   res.status(200).json(await favoritoService.listar(req.usuario.id, leerPaginacion(req.query)));
+});
+
+router.get('/me/conversaciones', autenticar, async (req, res) => {
+  res.status(200).json(await conversacionService.listar(req.usuario.id, leerPaginacion(req.query)));
 });
 
 router.get('/:id/anuncios', async (req, res) => {

@@ -157,9 +157,9 @@ async function detalle(id) {
   };
 }
 
-/** Fila mínima con lo justo para comprobar la autoría. */
+/** Fila mínima con lo justo para comprobar la autoría y el estado. */
 async function buscar(id) {
-  const filas = await consultar('SELECT id, id_autor, imagen FROM anuncios WHERE id = ?', [id]);
+  const filas = await consultar('SELECT id, id_autor, estado, imagen FROM anuncios WHERE id = ?', [id]);
   return filas[0] ?? null;
 }
 

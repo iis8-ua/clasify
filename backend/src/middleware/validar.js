@@ -311,6 +311,51 @@ function validarFiltrosAnuncios(query = {}) {
   return filtros;
 }
 
+/* ------------------------------------------------------------------ */
+/* Mensajería                                                          */
+/* ------------------------------------------------------------------ */
+
+const LONGITUD_MAXIMA_MENSAJE = 1000;
+
+// `desde` dice desde qué extremo del hilo se cuentan las páginas: por defecto
+// desde el principio, y con `final` la primera página trae los últimos mensajes.
+const DIRECCIONES_HILO = ['inicio', 'final'];
+const DESDE_POR_DEFECTO = 'inicio';
+
+/**
+ * Cuerpo de `POST` de un mensaje. El texto va recortado, como el resto.
+ *
+ * El cuerpo puede no existir (una `POST` sin cuerpo deja `req.body` a
+ * `undefined`), y eso es un campo obligatorio que falta, no un 500.
+ */
+function validarMensaje(cuerpo = {}) {
+  if (typeof cuerpo.texto !== 'string' || cuerpo.texto.trim() === '') {
+    throw ApiError.validacion('El texto del mensaje es obligatorio', 'texto');
+  }
+
+  const texto = cuerpo.texto.trim();
+  if (texto.length > LONGITUD_MAXIMA_MENSAJE) {
+    throw ApiError.validacion(
+      `El texto del mensaje no puede superar los ${LONGITUD_MAXIMA_MENSAJE} caracteres`,
+      'texto'
+    );
+  }
+
+  return { texto };
+}
+
+/** Query de los listados de mensajes: solo añade `desde`. */
+function validarDesde(query = {}) {
+  const desde = query.desde === undefined || query.desde === '' ? DESDE_POR_DEFECTO : query.desde;
+  if (!DIRECCIONES_HILO.includes(desde)) {
+    throw ApiError.validacion(
+      `desde tiene que ser uno de estos: ${DIRECCIONES_HILO.join(', ')}`,
+      'desde'
+    );
+  }
+  return desde;
+}
+
 module.exports = {
   validarRegistro,
   validarLogin,
@@ -319,5 +364,7 @@ module.exports = {
   validarActualizacionAnuncio,
   validarCambioEstado,
   validarFiltrosAnuncios,
+  validarMensaje,
+  validarDesde,
   validarId
 };
