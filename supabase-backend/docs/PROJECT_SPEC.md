@@ -19,6 +19,25 @@ operaciones sobre el recurso principal:
   obtener por id, modificar y eliminar.
 - Listado de **categorías** para los filtros.
 
+### Por qué aquí hay 2 iteraciones y en el backend propio hay 7 documentos
+
+Porque el enunciado acota el alcance del backend adicional: pide autenticación, registro y
+operaciones sobre el recurso principal, y prescinde expresamente del CRUD sobre un recurso
+secundario. Eso son exactamente los cuatro puntos de arriba.
+
+El proceso SDD es por iteración, así que el alcance da las iteraciones:
+
+| Iteración | Cubre |
+|---|---|
+| `01-auth` | Registro, login, logout, perfil propio y perfil público |
+| `02-anuncios` | CRUD de anuncios, búsqueda, paginación y categorías |
+
+En `backend/` hay tres iteraciones de funcionalidad que aquí no existen: favoritos, mensajería y
+valoraciones. Los favoritos son el recurso secundario que el enunciado deja fuera. Las otras dos son
+recursos que el backend principal sí necesita para su propio baremo, pero no este. Añadirlas serían
+tres iteraciones más de documentación del SDD, que es lo que más puntúa, para cubrir algo que el
+enunciado considera de poco valor didáctico.
+
 ## Recurso principal
 
 Anuncios. Los mismos campos que en el backend propio, con las diferencias que imponen Postgres y

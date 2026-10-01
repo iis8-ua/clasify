@@ -116,10 +116,14 @@ Dos cosas a tener en cuenta antes de ejecutarlas:
 
 ## Qué tiene y qué no tiene frente al backend propio
 
-Lo de este backend son las mismas operaciones de announcement, perfil y categorías, pero no es una
-copia del otro: el enunciado deja fuera de esta iteración los favoritos, la mensajería y las
-valoraciones, y aquí no están. Lo que sí se persiguió es que las operaciones que existen se
-comporten igual, y eso se comprueba en `tests/paridadConBackendPropio.test.js`.
+Lo de este backend son las mismas operaciones de anuncios, perfil y categorías, pero no es una copia
+del otro: el enunciado deja fuera los favoritos, la mensajería y las valoraciones, y aquí no están.
+Lo que sí se persiguió es que las operaciones que existen se comporten igual, y eso se comprueba en
+`tests/paridadConBackendPropio.test.js`.
+
+Por eso este `docs/iterations/` tiene dos documentos y el del backend propio tiene siete: el
+enunciado acota el alcance de este a autenticación, registro y recurso principal. El detalle está en
+`docs/PROJECT_SPEC.md`.
 
 Dos cosas hubo que hacerlas a medida para que coincidieran:
 

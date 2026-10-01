@@ -53,7 +53,7 @@ Técnicos:
 6. **`%` y `_` en la búsqueda.** Sin escapar, un `like` los trata como comodines y buscar "100%"
    trae todo. Se escapan antes de añadir los `%` de surround.
 
-### PLAN
+## PLAN
 
 1. Crear la tabla `anuncios` con las claves foráneas a `perfiles` y `categorias`.
 2. Configurar RLS en `anuncios`.
@@ -199,5 +199,16 @@ es el sitio donde se decora no volver a perderlas. En esa vuelta aparecieron dos
 - `672b401` - `probar(supabase)`: 105 pruebas contra el proyecto real de Supabase
 - `cfa45ec` - `documentar(supabase)`: arquitectura, iteraciones y puesta en marcha
 - `1fb7ac3` - `documentar(docs)`: sitúa I7 en el README raíz y en el diseño
+- `19d0285` - `documentar(docs)`: registra los commits de I7
+- `e11ff80` - `añadir(supabase)`: listado por autor, filtro de estado y búsqueda sin acentos
+- `4b0b424` - `añadir(supabase)`: quita variables de entorno de los tests que no se usaban
+- `4ffa7fc` - `probar(supabase)`: 21 pruebas para la paridad con el backend propio
+- `43b4e87` - `documentar(supabase)`: deja por escrito en qué se parecen los dos backends
 
-> La convención de commits y el proceso de la iteración están en `CONTRIBUTING.md`.
+> Los merges a `develop` (`8aeaef8` y `89e3f99`) no se listan, igual que en las
+> iteraciones del backend propio. La convención de commits y el proceso de la
+> iteración están en `CONTRIBUTING.md`.
+>
+> Los cuatro últimos son de una segunda vuelta que no estaba en el plan: al
+> comparar los dos backends aparecieron diferencias de comportamiento, y su
+> historia está en la sección "Segunda vuelta" del AI_LOG de la iteración 02.
