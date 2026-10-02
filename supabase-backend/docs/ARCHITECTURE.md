@@ -17,7 +17,7 @@ login(email, password)
 logout()
 perfil(usuarioId)
 actualizarPerfil(datos)
-listarCategorias()
+listarCategorias({ pagina, limite })
 crearAnuncio(datos)
 listarAnuncios({ texto, categoria, pagina, limite })
 obtenerAnuncio(id)
@@ -78,7 +78,37 @@ El backend propio no distingue acentos ni mayúsculas porque la collation de la 
 Lo que se hizo es materializar la búsqueda. La migración `0002` añade `titulo_buscable` y
 `descripcion_buscable`, con el texto en minúsculas y sin acentos, las rellena un trigger en cada
 escritura y las indexa. La migración viene con una comprobación que aborta si queda alguna fila sin
-normalizar, por si algún camino de escritura se saltara el trigger.
+normalizar, por si algún camino de escritura se saltara el trigger. La `0003` sustituye esos índices
+por otros de trigramas (`pg_trgm`), que es lo que accelerate `ilike '%texto%'`: un `LIKE` con
+comodines al principio no puede aprovechar un índice `btree` normal.
+
+La tabla de control `schema_migrations` la crea `db/migrar.js`, no una migración, y el script le
+quita los permisos a `anon` y a `authenticated` al crearla. Los permisos por defecto del proyecto
+dejan leer lo que se cree en `public`, así que sin eso se podía leer desde fuera con la sola clave
+anónima.
+
+## Escapar el término de búsqueda
+
+El filtro de texto se monta como una cadena para un `.or()`:
+
+```
+titulo_buscable.ilike."%termino%",descripcion_buscable.ilike."%termino%"
+```
+
+Hay dos gramáticas cruzadas ahí dentro y **no se escapan igual**, que es lo más fácil de liar de
+todo el subproyecto. Se comprobó una por una contra el proyecto:
+
+| Carácter | Cómo se escapa | Por qué |
+| --- | --- | --- |
+| `,` | entrecomillado del valor | Separa las condiciones del `.or()`. Sin comillas, buscar `",estado.eq.vendido,descripcion_buscable.ilike."x` devolvía 24 anuncios, los 24 vendidos, sin error. |
+| `%` | **dos** barras invertidas | El parser del filtro de PostgREST reduce `\\` a `\` antes de mandar el valor a Postgres, así que hay que escribir dos para que llegue una. Con una sola, `buscar cincuenta%` encontraba el anuncio entero porque el `%` volvía a ser comodín. Con tres, el filtro no parseaba. |
+| `_` | **dos** barras invertidas | Por lo mismo que el `%`. |
+| `"` | **una** sola barra | Aquí dentro de las comillas, el `\"` lo entiende el propio parser de PostgREST y no cierra el valor. Con dos barras, no. |
+| `\` | cuatro barras | Tiene que llegar a Postgres como `\\`, que es un backslash literal. |
+
+El término se entrecomilla siempre, y el escapado va después de normalizar. `escaparParaLike` está en
+`helpers/listado.js` con esta tabla escrita en el comentario, porque volver a deducirla desde cero
+lleva a la misma trampa.
 
 El otro lado también importa: el término que escribe quien busca se normaliza igual en JavaScript
 (`normalizarParaBusqueda`), porque si no la columna queda en `electronica` y el término en
@@ -107,6 +137,11 @@ paralelo a la de datos. No sirve el `count` de la respuesta de la página: ese e
 de la página, no el total de la tabla, y usarlo haría que el bloque de paginación dijera siempre que
 hay una sola página.
 
+Todos los listados devuelven el mismo sobre `datos` + `paginacion`, **`listarCategorias` incluido**.
+Las categorías son filas fijas de una tabla de referencia y podrían quedar fuera de la paginación; se
+pagan igual porque el backend propio sí lo hace y los dos proyectos comparten la misma API, así que
+dejarlo solo aquí significaría mantener dos formatos de respuesta.
+
 ## Comportamientos de Supabase que conviene conocer
 
 Estas seis cosas se encontraron implementando y probando, y no están en el enunciado:
@@ -129,6 +164,10 @@ Estas seis cosas se encontraron implementando y probando, y no están en el enun
    trigger, que no exige inmutabilidad.
 6. **`getClaims()` necesita el token explícito.** La sesión que guarda el cliente no es la del
    cliente por token, así que hay que pasárselo.
+7. **Dentro de un `.or()`, el escapado de PostgREST no es el de `LIKE`.** El parser del filtro
+   reduce cada `\\` a un solo `\` antes de mandar el valor a Postgres, de modo que para que el
+   `ILIKE` reciba `\%` hay que escribir **dos** barras. Con una, el `%` vuelve a ser comodín. La
+   tabla completa está en [Escapar el término de búsqueda](#escapar-el-término-de-búsqueda).
 
 ## Configuración
 
@@ -144,6 +183,8 @@ Estas seis cosas se encontraron implementando y probando, y no están en el enun
 ## Pruebas
 
 - **Jest** sobre la capa de servicios, contra el proyecto Supabase de la nube. Script `npm test`.
+- 169 tests en 7 ficheros. `auth`, `anuncios` y `lecturaPublica` van contra el proyecto real;
+  `errores`, `listado` y `validacionAnuncio` son puros, sin red.
 - Requisito para que funcione: el proveedor Email activado y "Confirm email" desactivado.
 - Los tests **no borran nada** al terminar, porque la clave publicable no puede tocar `auth.users`.
   Cada usuario tiene un email único y se reutiliza entre tests. Para vaciar el proyecto:

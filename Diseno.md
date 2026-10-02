@@ -196,7 +196,7 @@ Todas las rutas empiezan por `/clasify_api/`. `JWT` indica que requiere token.
 | GET | `/usuarios/me/favoritos` | JWT | Mis favoritos (paginado) |
 | GET | `/usuarios/me/conversaciones` | JWT | Mis conversaciones activas (paginado) |
 | GET | `/usuarios/:id` | JWT opcional | Perfil público con media de valoración, y `mi_valoracion` si el token ya ha valorado |
-| GET | `/categorias` | - | Listado de categorías para los filtros |
+| GET | `/categorias` | - | Listado de categorías para los filtros (paginado) |
 | GET | `/anuncios` | - | Listado/búsqueda (texto, categoría, orden) paginado |
 | POST | `/anuncios` | JWT | Crear anuncio (`multipart/form-data` con campos + `imagen`) |
 | GET | `/anuncios/:id` | JWT opcional | Detalle + autor + categoría + `num_favoritos` (+ `conversacion`, `ultimos_mensajes` y `num_mensajes` si participa en un hilo) |

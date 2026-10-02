@@ -68,6 +68,9 @@ await anuncioService.crear(
   contexto
 );
 
+// Categorías, paginadas también (pocas filas, pero mismo formato que el resto).
+await categoriaService.listarCategorias();
+
 // Los anuncios de una persona, que es lo que en el backend propio contestan
 // /usuarios/me/anuncios y /usuarios/:id/anuncios.
 await anuncioService.listarPorAutor({ idAutor: usuario.id });

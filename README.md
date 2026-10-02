@@ -92,7 +92,7 @@ cd backend
 npm test
 ```
 
-Son 297 pruebas de Jest + Supertest que hacen peticiones HTTP reales contra la API. Antes de
+Son 304 pruebas de Jest + Supertest que hacen peticiones HTTP reales contra la API. Antes de
 cada prueba se ejecuta el esquema sobre `DB_TEST_NAME` y se vacían las tablas, así que la base
 de desarrollo no se toca y no hace falta limpiarla a mano. La configuración del JWT de las
 pruebas está aparte en `backend/tests/prepararEntorno.js`.

@@ -151,8 +151,10 @@ el total.
 
 ### Resultado
 
-- 126 tests en verde contra el proyecto real, de los cuales 68 son de esta iteración: los 47
-  originales más 21 de la vuelta de paridad.
+- 126 tests en verde contra el proyecto real en el momento de cerrar esta iteración, de los cuales 68
+  son de esta iteración: los 47 originales más 21 de la vuelta de paridad. La revisión de código
+  previa al cierre (iteración 8) añadiría después `errores.test.js` y más casos de uuid, de
+  escapado y de paginación, hasta los 169 que hay ahora.
 - Las siete comprobaciones manuales de la tabla, hechas con un script contra el proyecto real.
 - El listado público se comprobó sin sesión: 89 anuncios en total y 18 páginas de 5.
 

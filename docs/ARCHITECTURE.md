@@ -145,7 +145,7 @@ petición requiere un token válido.
 | DELETE | `/usuarios/:id/valoracion` | JWT | Borra mi valoración sobre ese usuario. 404 si no había ninguna |
 | GET | `/usuarios/:id/valoraciones` | - | Valoraciones que ha recibido ese usuario (paginado) |
 | GET | `/usuarios/me/valoraciones` | JWT | Valoraciones que he puesto yo (paginado) |
-| GET | `/categorias` | - | Listado de categorías para los filtros (sin paginar) |
+| GET | `/categorias` | - | Listado de categorías para los filtros (paginado) |
 | GET | `/anuncios` | - | Listado con búsqueda por texto, filtro por categoría y ordenación por fecha o precio (paginado) |
 | POST | `/anuncios` | JWT | Creación de un anuncio (`multipart/form-data` con campos + `imagen` opcional) |
 | GET | `/anuncios/:id` | JWT opcional | Detalle + autor + categoría + `num_favoritos` (+ `conversacion`, `ultimos_mensajes` y `num_mensajes` si el token participa en un hilo del anuncio) |
@@ -171,8 +171,13 @@ Los listados aceptan `pagina` (>= 1, por defecto 1) y `limite` (1–100, por def
 }
 ```
 
-`GET /categorias` es la excepción: no va paginado porque son las filas de una tabla de referencia
-que no crece con el uso, y un desplegable de filtros no lo necesita.
+Todos los listados de la API, **`GET /categorias` incluido**, usan ese mismo sobre. El de categorías
+podría quedar fuera: son filas fijas de una tabla de referencia y un desplegable de filtros no
+necesita paginación, y en el enunciado la exigencia de paginar está escrita dentro del bloque de
+requisitos del recurso principal. Se pagina igualmente, y por dos razones concretas: para no tener que
+recordar que un endpoint es el raro, y porque el backend de Supabase pagina el suyo y los dos
+proyectos comparten la misma API, así que dejarlo solo aquí obligaría a mantener dos formatos de
+respuesta distintos.
 
 ### Filtros del listado de anuncios
 
