@@ -859,7 +859,7 @@ describe('DELETE /clasify_api/anuncios/:id', () => {
 });
 
 describe('GET /clasify_api/categorias', () => {
-  test('devuelve 200 con las categorías ordenadas por nombre', async () => {
+  test('devuelve 200 con las categorías ordenadas por nombre y paginadas', async () => {
     const respuesta = await request(app).get('/clasify_api/categorias');
 
     expect(respuesta.status).toBe(200);
@@ -868,9 +868,50 @@ describe('GET /clasify_api/categorias', () => {
       { id: 1, nombre: 'Electrónica' },
       { id: 2, nombre: 'Hogar y jardín' }
     ]);
+    expect(respuesta.body.paginacion).toEqual({
+      pagina: 1,
+      limite: 20,
+      total: 3,
+      paginas: 1
+    });
   });
 
   test('no necesita token', async () => {
     expect((await request(app).get('/clasify_api/categorias')).status).toBe(200);
+  });
+
+  test('pagina de verdad, sin repetir ni saltarse categorías', async () => {
+    const primera = await request(app).get('/clasify_api/categorias?limite=2&pagina=1');
+    const segunda = await request(app).get('/clasify_api/categorias?limite=2&pagina=2');
+
+    expect(primera.body.datos).toEqual([
+      { id: 3, nombre: 'Deportes' },
+      { id: 1, nombre: 'Electrónica' }
+    ]);
+    expect(segunda.body.datos).toEqual([{ id: 2, nombre: 'Hogar y jardín' }]);
+
+    expect(primera.body.paginacion).toMatchObject({ pagina: 1, limite: 2, total: 3, paginas: 2 });
+    expect(segunda.body.paginacion).toMatchObject({ pagina: 2, limite: 2, total: 3, paginas: 2 });
+  });
+
+  test('una página que no existe da la lista vacía, no un error', async () => {
+    const respuesta = await request(app).get('/clasify_api/categorias?pagina=99');
+
+    expect(respuesta.status).toBe(200);
+    expect(respuesta.body.datos).toEqual([]);
+    expect(respuesta.body.paginacion.total).toBe(3);
+  });
+
+  test.each([
+    ['pagina=0', 'pagina'],
+    ['pagina=-1', 'pagina'],
+    ['pagina=abc', 'pagina'],
+    ['limite=0', 'limite'],
+    ['limite=101', 'limite']
+  ])('con ?%s devuelve 400 diciendo el campo', async (query, campo) => {
+    const respuesta = await request(app).get(`/clasify_api/categorias?${query}`);
+
+    expect(respuesta.status).toBe(400);
+    expect(respuesta.body.error).toMatchObject({ campo });
   });
 });
