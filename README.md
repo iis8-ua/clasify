@@ -115,11 +115,11 @@ Para ver la cobertura: `npm test -- --coverage`.
 │   ├── tests/
 │   ├── uploads/             Imágenes subidas por los usuarios
 │   └── .env.example
-├── docs/                    Documentación SDD del backend propio
+├── docs/                    Documentación SDD del proyecto (I1-I8)
 │   ├── PROJECT_SPEC.md
 │   ├── ARCHITECTURE.md
 │   ├── AI_SUMMARY.md
-│   └── iterations/          SPEC, PLAN y TEST_PLAN de cada iteración
+│   └── iterations/          SPEC, PLAN y TEST_PLAN de cada iteración (01 a 08)
 └── supabase-backend/        Segundo backend (Supabase) con su propio SDD
     ├── migrations/          SQL de esquema, RLS, trigger y RPC
     ├── src/services/        Capa de servicios (auth, perfil, anuncios, categorías)

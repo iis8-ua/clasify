@@ -58,7 +58,7 @@ async function crearUsuario(etiqueta = 'test', nombre = 'Usuario de prueba') {
  * Ojo: Jest da un registro de módulos distinto por fichero de test, así que esta
  * cache es por fichero. Los cinco usuarios de un fichero no coinciden con los de
  * otro, y por eso las pruebas de "el usuario A no toca lo del usuario B" pueden
- * usar usuarios distintos en cada fichero sinuously interferir.
+ * usar usuarios distintos en cada fichero sin interferir entre ellas.
  */
 const cache = new Map();
 
