@@ -22,3 +22,6 @@ __MACOSX/
 
 # Enunciados en PDF: no se versionan
 *.pdf
+
+# Entrega comprimida del proyecto: se genera sobre el repo, no se versiona
+*.zip
