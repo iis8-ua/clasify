@@ -69,13 +69,52 @@ async function contar(consulta) {
 }
 
 /**
- * Escapa `%` y `_` para que un `like` los trate como texto.
+ * Escapa los caracteres que tienen significado dentro del filtro de PostgREST.
  *
- * Sin esto, buscar "100%" traería cualquier cosa, porque `%` es el comodín de
- * "cualquier secuencia".
+ * Las dos gramáticas que se cruzan aquí no se escapan igual, y es lo más
+ * fácil de liar de todo este archivo:
+ *
+ *   * El `ILIKE` de Postgres usa `\` como carácter de escape, así que un `\%` es
+ *     un porcentaje de texto y no un comodín.
+ *   * El parser del filtro de PostgREST, dentro de las comillas del valor,
+ *     reduce cada `\\` a un solo `\` antes de mandarlo a Postgres. De ahí que
+ *     para el comodín hagan falta **dos** barras: tiene que llegar una.
+ *   * Pero para las comillas, dentro de las comillas, una sola barra sí alcanza:
+ *     el `\"` lo entiende el propio parser de PostgREST y no cierra el valor.
+ *
+ * Comprobado uno a uno contra el proyecto, porque con una barra de menos el `%`
+ * volvía a ser comodín y con una de más el filtro no parseaba:
+ *
+ *   valor buscado         patrón que se manda        resultado
+ *   cincuenta%            "%cincuenta\\%%"            0 filas (bien)
+ *   "x",estado.eq.vendido "%\\",estado...\\"%"        0 filas (bien, sin inyección)
+ *   una barra de menos    "%cincuenta\%%"             encuentra el anuncio (mal)
+ *   una barra de más      "%cincuenta\\\\%%"           error de parseo (mal)
  */
+const ESCAPES = {
+  '\\': '\\\\\\\\',
+  '%': '\\\\%',
+  _: '\\\\_',
+  '"': '\\"'
+};
+
 function escaparParaLike(texto) {
-  return texto.replace(/([\\%_])/g, '\\$1');
+  return texto.replace(/[\\%_"]/g, (caracter) => ESCAPES[caracter]);
+}
+
+/**
+ * `ilike` con el comodín alrededor, ya escapado y normalizado el texto.
+ *
+ * El valor va **entre comillas dobles** y no es opcional. El filtro se monta como
+ * una cadena donde la coma separa las condiciones de un `.or()`, así que un término
+ * con una coma se colaba como una condición más. Comprobado contra el proyecto:
+ * buscando `",estado.eq.vendido,descripcion_buscable.ilike."x` sin comillas
+ * devolvía 24 anuncios, los 24 vendidos, y sin dar ningún error.
+ *
+ * Con las comillas, ese mismo término devuelve 0 filas.
+ */
+function patronBusqueda(texto) {
+  return `"%${escaparParaLike(normalizarParaBusqueda(texto))}%"`;
 }
 
 /**
@@ -120,10 +159,6 @@ function normalizarParaBusqueda(texto) {
     .toLowerCase();
 }
 
-/** `ilike` con el comodín alrededor, ya escapado y normalizado el texto. */
-function patronBusqueda(texto) {
-  return `%${escaparParaLike(normalizarParaBusqueda(texto))}%`;
-}
 
 module.exports = {
   LIMITES,

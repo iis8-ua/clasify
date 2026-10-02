@@ -128,7 +128,11 @@ async function listar(filtros = {}, paginacion) {
 
 /**
  * Detalle del anuncio con su autor, su categoría y el número de favoritos.
- * No se incluye `conversacion`: esa tabla no se consulta hasta la I5.
+ *
+ * La conversación no se incluye aquí, y no es un descuido: la añade la ruta
+ * (`routes/anuncios.js`) cuando quien consulta participa en el hilo, y solo en ese
+ * caso. Este servicio no sabe de conversaciones, y el detalle tiene que poder
+ * responder sin sesión y para un usuario que aún no ha escrito nunca.
  */
 async function detalle(id) {
   const filas = await consultar(
@@ -231,11 +235,38 @@ async function actualizar(id, idUsuario, cambios, imagenNueva) {
   valores.push(id);
   await ejecutar(`UPDATE anuncios SET ${columnas.join(', ')} WHERE id = ?`, valores);
 
+  // A partir de aquí el `UPDATE` ya está dentro, así que la fila apunta al
+  // nombre de la imagen nueva. Si la lectura que viene después fallara (se cae la
+  // conexión, por ejemplo), el error subiría hasta el manejador central, la
+  // respuesta sería un 500 y `borrarImagenSiLaPeticionFalla` borraría ese
+  // fichero por ser una petición fallida. El resultado sería un anuncio apuntando
+  // a una imagen que ya no está en `uploads/`, y sin forma de recuperarla.
+  //
+  // Por eso, si esa lectura falla, se deshace solo lo de la imagen: la fila vuelve
+  // a apuntar al fichero anterior, que sigue en disco, y el nuevo queda huérfano,
+  // que es exactamente lo que el middleware sabe limpiar. El error se vuelve a
+  // lanzar igualmente, porque la edición no se ha podido confirmar.
+  let actualizado;
+  try {
+    actualizado = await detalle(id);
+  } catch (error) {
+    if (imagenNueva !== undefined) {
+      await ejecutar('UPDATE anuncios SET imagen = ? WHERE id = ?', [anterior.imagen, id]).catch(
+        () => {
+          // Si ni esto se puede deshacer, la fila se queda con el nombre de la
+          // imagen nueva. Es el peor caso posible y no hay forma limpia de
+          // evitarlo sin volver a consultar, que es justo lo que está fallando.
+        }
+      );
+    }
+    throw error;
+  }
+
   if (imagenNueva !== undefined && anterior.imagen) {
     await borrarFichero(anterior.imagen);
   }
 
-  return detalle(id);
+  return actualizado;
 }
 
 /** Cambia el estado entre disponible y vendido. Solo su autor. */

@@ -144,7 +144,7 @@ function validarNuevo(datos) {
  * datos con `auth.uid() = id_autor`, así que los dos sitios tienen que estar de
  * acuerdo.
  */
-async function crear(datos, { token, usuarioId }) {
+async function crear(datos, { token, usuarioId } = {}) {
   const validados = validarNuevo(datos);
 
   const { data, error } = await clienteConToken(token)
@@ -258,14 +258,25 @@ async function listar({ texto, categoria, estado, orden = 'fecha_desc', ...opcio
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Comprueba que un id tiene forma de uuid antes de mandarlo a la base.
+ *
+ * `anuncios.id` e `id_autor` son uuid. Sin esta comprobación, Postgres responde
+ * "invalid input syntax for type uuid", que es un error interno de la base de
+ * datos y no un 404 ni un fallo de validación de la capa. Todas las funciones
+ * que reciben un id pasan por aquí, no solo las de lectura: si se valida en unas
+ * sí y en otras no, el mismo id inválido daría dos respuestas distintas según por
+ * dónde entre.
+ */
+function exigirUuid(valor, nombre = 'el id del anuncio') {
+  if (typeof valor !== 'string' || !UUID_RE.test(valor)) {
+    throw deServicio('VALIDACION', `${nombre} no es un uuid válido`, 400);
+  }
+}
+
 /** Un anuncio con su autor y su categoría, o `null` si no existe. */
 async function obtener(id) {
-  // `anuncios.id` es un uuid. Sin esta comprobación Postgres responde
-  // "invalid input syntax for type uuid", que es un error interno de la base de
-  // datos y no un 404 ni un fallo de validación de la capa.
-  if (typeof id !== 'string' || !UUID_RE.test(id)) {
-    throw deServicio('VALIDACION', 'El id del anuncio no es un uuid válido', 400);
-  }
+  exigirUuid(id);
 
   const { data, error } = await cliente
     .from('anuncios')
@@ -325,7 +336,9 @@ function validarActualizacion(datos) {
  * porque el `WHERE` que pone el cliente y la política son cosas distintas, y con
  * solo uno de los dos se podría escribir en la fila equivocada.
  */
-async function actualizar(id, datos, { token, usuarioId }) {
+async function actualizar(id, datos, { token, usuarioId } = {}) {
+  exigirUuid(id);
+
   const cambios = validarActualizacion(datos);
 
   const { data, error } = await clienteConToken(token)
@@ -366,7 +379,9 @@ async function cambiarEstado(id, estado, contexto) {
  * información: si no existe no hay fila que borrar y si existe pero es de otro,
  * borrar no hace nada.
  */
-async function eliminar(id, { token, usuarioId }) {
+async function eliminar(id, { token, usuarioId } = {}) {
+  exigirUuid(id);
+
   const { error } = await clienteConToken(token)
     .from('anuncios')
     .delete()
@@ -387,7 +402,6 @@ async function eliminar(id, { token, usuarioId }) {
   return { eliminado: true };
 }
 
-
 /**
  * Lista los anuncios de un autor, con los mismos filtros y paginación que
  * `listar`.
@@ -400,6 +414,7 @@ async function listarPorAutor({ idAutor, pagina, limite, ...filtros } = {}) {
   if (!idAutor) {
     throw deServicio('VALIDACION', 'Falta el autor de los anuncios', 400);
   }
+  exigirUuid(idAutor, 'el id del autor');
 
   // La paginación va en el mismo objeto que los filtros, como en `listar`. Con un
   // argumento aparte era fácil dejar `pagina` y `limite` dentro de los filtros y

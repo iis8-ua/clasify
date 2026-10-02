@@ -14,7 +14,7 @@ const EMAIL_LUCIA = 'lucia@example.com';
  * Hash del seed. No se usa para hacer login en ningún test (los tokens se firman
  * directamente), pero la columna es `NOT NULL` sin valor por defecto.
  */
-const HASH = '$2b$12$zvGU1QCN7FVLhEl5ViOEd.QN907DrZYboJGWNDQmfWt9eCZ3sak/G';
+const HASH = '$2b$12$zvGU1QCN7FVLhEl5ViOEd.QN907DrZYboJGWDDQmfWt9eCZ3sak/G';
 
 // `TRUNCATE` reinicia el `AUTO_INCREMENT`, así que los ids son siempre los mismos:
 // Ana vende los anuncios 1 y 2, Carlos el 3, y Lucía no publica ninguno.

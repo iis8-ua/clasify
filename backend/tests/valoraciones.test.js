@@ -11,7 +11,7 @@ const { firmarToken } = require('../src/services/authService');
  * tokens se firman directamente porque `bcrypt` con coste 12 serían unos 300 ms
  * por llamada.
  */
-const HASH = '$2b$12$zvGU1QCN7FVLhEl5ViOEd.QN907DrZYboJGWNDQmfWt9eCZ3sak/G';
+const HASH = '$2b$12$zvGU1QCN7FVLhEl5ViOEd.QN907DrZYboJGWDDQmfWt9eCZ3sak/G';
 
 const EMAIL_ANA = 'ana@example.com';
 const EMAIL_CARLOS = 'carlos@example.com';

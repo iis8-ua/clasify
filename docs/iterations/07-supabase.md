@@ -28,10 +28,14 @@ Técnicos:
 
 - Las reglas de acceso se expresan con RLS en la base de datos, no en código. Que `anon` no pueda
   escribir un anuncio ajeno se cumple en Postgres, no porque el servicio se acuerde.
-- Dos migraciones SQL, aplicadas por orden de nombre y de forma idempotente, con `pg` por la
-  connection string del *session pooler*.
+- Tres migraciones SQL, aplicadas por orden de nombre y de forma idempotente, con `pg` por la
+  connection string del *session pooler*. Cada una se anota en `schema_migrations`, así que no se
+  re-aplican: sin ese registro, la segunda ejecución fallaba en el `ADD COLUMN` de la 0001.
 - Los servicios encapsulan todas las consultas: el cliente no llama a `supabase.from` directamente.
-- Los errores de Supabase se traducen a un único tipo con código, mensaje y estado HTTP.
+- Los errores de Supabase se traducen a un único tipo con código, mensaje y estado HTTP, y el texto
+  de Postgres no sale hacia el consumidor: se queda en `errorOriginal`, que no es enumerable.
+- La búsqueda se materializa en dos columnas y se indexa con trigramas de `pg_trgm`, en vez de
+  llamar a `unaccent()` en el `WHERE`, que no usa ningún índice.
 - Suite de Jest contra el proyecto real, sin dobles ni emuladores.
 
 ### Fuera de alcance
@@ -153,19 +157,23 @@ confirmar que el trigger no se deja ninguno sin crear.
 
 ### Tests automáticos
 
-126 tests en 6 ficheros, todos contra el proyecto real de Supabase:
+169 tests en 7 ficheros, todos contra el proyecto real de Supabase:
 
-- `auth.test.js`: registro, login, logout, validación del token y perfiles, incluido el caso de que el
-  access token siga siendo válido después de cerrar sesión.
-- `anuncios.test.js`: escritura de anuncios, RLS entre usuarios y listado por autor.
-- `paridadConBackendPropio.test.js`: búsqueda con y sin acentos, filtro por estado y listado por
+- `auth.test.js` (26): registro, login, logout, validación del token y perfiles, incluido el caso de que
+  el access token siga siendo válido después de cerrar sesión.
+- `anuncios.test.js` (28): escritura de anuncios, RLS entre usuarios, listado por autor y rechazo de
+  ids que no son uuid.
+- `errores.test.js` (26): traducción de los errores de Supabase y Postgres, y que su texto no se
+  cuele hacia el consumidor.
+- `lecturaPublica.test.js` (26): listado, detalle y categorías sin sesión, con la paginación del
+  listado de categorías.
+- `listado.test.js` (25): paginación, cálculo de páginas y escapado de comodines.
+- `paridadConBackendPropio.test.js` (13): búsqueda con y sin acentos, filtro por estado y listado por
   autor, contra lo que hace el backend propio.
-- `lecturaPublica.test.js`: listado, detalle y categorías sin sesión.
-- `listado.test.js`: paginación, cálculo de páginas y escapado de comodines.
-- `validacionAnuncio.test.js`: validaciones puras, sin red.
+- `validacionAnuncio.test.js` (25): validaciones puras, sin red.
 
 El que más valor ha sostenido fue `paridadConBackendPropio.test.js`, que es nuevo y a propósito:
-los otros cinco comprueban que cada cosa funcione, ese comprueba que se comporte como la del backend
+los demás comprueban que cada cosa funcione, ese comprueba que se comporte como la del backend
 propio, que es una comparación y no un requisito suelto.
 
 ## AI_LOG

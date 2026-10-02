@@ -237,7 +237,8 @@ bien:
 ### Resultado
 
 - 50 tests nuevos en `tests/valoraciones.test.js` y 12 en `tests/mensajeria.test.js`.
-- Suite completa: 297 tests, todos en verde.
+- Suite completa: 297 tests, todos en verde (el total final, tras la revisión de la iteración 8,
+  está en `docs/iterations/08-cierre.md`).
 - Cobertura: `valoracionService` 100 % de líneas, `routes/usuarios.js` y `routes/anuncios.js` al 100 %.
 - Las 26 comprobaciones manuales de la tabla de arriba se hicieron con `curl` contra un servidor real
   en el puerto 3100, no solo con los tests.

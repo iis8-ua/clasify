@@ -2,6 +2,7 @@
 
 const { cliente, clienteConToken } = require('../supabase/cliente');
 const { desdeError, deServicio } = require('../errors/ErrorDeServicio');
+const anuncioService = require('./anuncioService');
 
 const LONGITUD_MAXIMA_BIOGRAFIA = 500;
 

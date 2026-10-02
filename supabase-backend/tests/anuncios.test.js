@@ -164,6 +164,66 @@ describe('borrar un anuncio', () => {
   });
 });
 
+// Estas tres rutas también reciben un uuid, y antes lo mandaban a Postgres sin
+// comprobarlo. La respuesta era un 500 con "invalid input syntax for type uuid",
+// que es un error interno de la base de datos y no un 400 de la capa. Además, el
+// mismo id inválido contestaba de una manera en `obtener` y de otra aquí.
+describe('ids que no son uuid en las rutas de escritura', () => {
+  const ID_INVALIDO = 'no-es-un-uuid';
+
+  test('editar con un id inválido es un 400 de la capa, no un error de Postgres', async () => {
+    const u = await usuario();
+    const anuncio = await crearAnuncio(u.contexto);
+
+    await expect(
+      anuncioService.actualizar(ID_INVALIDO, { titulo: 'Otro titulo' }, u.contexto)
+    ).rejects.toThrow(/uuid/);
+
+    await expect(anuncioService.cambiarEstado(ID_INVALIDO, 'vendido', u.contexto)).rejects.toThrow(
+      /uuid/
+    );
+
+    // El anuncio bueno sigue intacto: el id inválido no llegó a tocar nada.
+    const despues = await anuncioService.obtener(anuncio.id);
+    expect(despues.titulo).toBe(anuncio.titulo);
+    expect(despues.estado).toBe('disponible');
+  });
+
+  test('borrar con un id inválido da 400 y no borra nada', async () => {
+    const u = await usuario();
+    const anuncio = await crearAnuncio(u.contexto);
+
+    await expect(anuncioService.eliminar(ID_INVALIDO, u.contexto)).rejects.toThrow(/uuid/);
+
+    await expect(anuncioService.obtener(anuncio.id)).resolves.toBeTruthy();
+  });
+
+  test('listar por un autor que no es uuid da 400', async () => {
+    await expect(anuncioService.listarPorAutor({ idAutor: 1 })).rejects.toThrow(/uuid/);
+    await expect(anuncioService.listarPorAutor({ idAutor: 'ana' })).rejects.toThrow(/uuid/);
+  });
+
+  test('el error de un id inválido es siempre de la misma forma', async () => {
+    const u = await usuario();
+    const anuncio = await crearAnuncio(u.contexto);
+
+    const casos = [
+      () => anuncioService.obtener(ID_INVALIDO),
+      () => anuncioService.actualizar(ID_INVALIDO, { titulo: 'X' }, u.contexto),
+      () => anuncioService.eliminar(ID_INVALIDO, u.contexto),
+      () => anuncioService.listarPorAutor({ idAutor: ID_INVALIDO })
+    ];
+
+    for (const caso of casos) {
+      const error = await caso().catch((e) => e);
+      expect(error).toBeInstanceOf(ErrorDeServicio);
+      expect(error.codigo).toBe('VALIDACION');
+      expect(error.estado).toBe(400);
+    }
+    expect(anuncio.id).toBeTruthy();
+  });
+});
+
 describe('RLS visto desde la API', () => {
   test('cualquiera puede listar anuncios sin token', async () => {
     const u = await usuario();

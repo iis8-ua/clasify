@@ -68,19 +68,54 @@ describe('escaparParaLike', () => {
     expect(escaparParaLike('bicicleta')).toBe('bicicleta');
   });
 
-  test('escapa el % para que no actúe de comodín', () => {
-    expect(escaparParaLike('100%')).toBe('100\\%');
+  // Ojo con el número de barras, que es lo que se comprobó contra el proyecto:
+  // el comodín necesita dos y la comilla una. Es lo más fácil de liar de aquí.
+  test('el % se escapa con dos barras, no con una', () => {
+    expect(escaparParaLike('100%')).toBe('100\\\\%');
   });
 
-  test('escapa el _ por el mismo motivo', () => {
-    expect(escaparParaLike('tal_m')).toBe('tal\\_m');
+  test('el _ se escapa también con dos barras', () => {
+    expect(escaparParaLike('tal_m')).toBe('tal\\\\_m');
   });
 
-  test('patronBusqueda envuelve entre comodines', () => {
-    expect(patronBusqueda('bici')).toBe('%bici%');
+  test('la comilla doble se escapa con una sola barra', () => {
+    expect(escaparParaLike('a"b')).toBe('a\\"b');
+  });
+
+  test('la barra invertida se escapa con cuatro', () => {
+    expect(escaparParaLike('c:\\fotos')).toBe('c:\\\\\\\\fotos');
+  });
+
+  test('patronBusqueda envuelve entre comodines y entrecomilla', () => {
+    expect(patronBusqueda('bici')).toBe('"%bici%"');
   });
 
   test('patronBusqueda escapa antes de añadir los comodines', () => {
-    expect(patronBusqueda('50%')).toBe('%50\\%%');
+    expect(patronBusqueda('50%')).toBe('"%50\\\\%%"');
+  });
+
+  test('patronBusqueda escapa el underscore para que no sea comodín', () => {
+    expect(patronBusqueda('tal_m')).toBe('"%tal\\\\_m%"');
+  });
+
+  // La coma separa condiciones dentro de un `.or()`, así que el valor tiene que
+  // ir entrecomillado. Probado contra el proyecto: sin comillas, un término con
+  // una coma se colaba como condición y devolvía filas que no correspondían.
+  test('patronBusqueda no deja que una coma añada condiciones al filtro', () => {
+    const patron = patronBusqueda('bici,estado.eq.vendido');
+    expect(patron.startsWith('"')).toBe(true);
+    expect(patron.endsWith('"')).toBe(true);
+  });
+
+  test('patronBusqueda escapa las comillas dobles del término', () => {
+    expect(patronBusqueda('a"b')).toBe('"%a\\"b%"');
+  });
+
+  test('el patrón nunca queda con una barra al final, que es un error de Postgres', () => {
+    // Con una barra de más el filtro no parseaba y Postgres respondía
+    // "LIKE pattern must not end with escape character".
+    for (const termino of ['%', '_', '\\', '"', 'a', '%_\\"']) {
+      expect(patronBusqueda(termino)).not.toMatch(/\\"$/);
+    }
   });
 });
