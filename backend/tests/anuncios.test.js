@@ -12,7 +12,7 @@ const { firmarToken } = require('../src/services/authService');
  * Hash del seed. No se usa para hacer login en ningún test (los tokens se firman
  * directamente), pero deja la tabla con datos que parecen reales.
  */
-const HASH = '$2b$12$zvGU1QCN7FVLhEl5ViOEd.QN907DrZYboJGWNDQmfWt9eCZ3sak/G';
+const HASH = '$2b$12$zvGU1QCN7FVLhEl5ViOEd.QN907DrZYboJWDDQmfWt9eCZ3sak/G';
 
 const EMAIL_ANA = 'ana@example.com';
 const EMAIL_CARLOS = 'carlos@example.com';

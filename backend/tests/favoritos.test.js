@@ -12,7 +12,7 @@ const { firmarToken } = require('../src/services/authService');
  * por llamada, y multiplicado por todas las pruebas de la suite serían medio
  * minuto de espera sin ganar nada.
  */
-const HASH = '$2b$12$zvGU1QCN7FVLhEl5ViOEd.QN907DrZYboJGWNDQmfWt9eCZ3sak/G';
+const HASH = '$2b$12$zvGU1QCN7FVLhEl5ViOEd.QN907DrZYboJGWDDQmfWt9eCZ3sak/G';
 
 const EMAIL_ANA = 'ana@example.com';
 const EMAIL_CARLOS = 'carlos@example.com';
