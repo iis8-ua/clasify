@@ -12,13 +12,14 @@
 CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public;
 
 ALTER TABLE anuncios
-  ADD COLUMN titulo_buscable text,
-  ADD COLUMN descripcion_buscable text;
+  ADD COLUMN IF NOT EXISTS titulo_buscable text,
+  ADD COLUMN IF NOT EXISTS descripcion_buscable text;
 
 CREATE OR REPLACE FUNCTION normalizar_para_busqueda(valor text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
+SET search_path = public
 AS $$
   SELECT lower(unaccent('public.unaccent', coalesce(valor, '')));
 $$;
@@ -26,13 +27,16 @@ $$;
 CREATE OR REPLACE FUNCTION anuncios_normalizar_busqueda()
 RETURNS trigger
 LANGUAGE plpgsql
+SET search_path = public
 AS $$
 BEGIN
-  NEW.titulo_buscable := normalizar_para_busqueda(NEW.titulo);
-  NEW.descripcion_buscable := normalizar_para_busqueda(NEW.descripcion);
+  NEW.titulo_buscable := public.normalizar_para_busqueda(NEW.titulo);
+  NEW.descripcion_buscable := public.normalizar_para_busqueda(NEW.descripcion);
   RETURN NEW;
 END;
 $$;
+
+DROP TRIGGER IF EXISTS trg_anuncios_normalizar_busqueda ON anuncios;
 
 CREATE TRIGGER trg_anuncios_normalizar_busqueda
   BEFORE INSERT OR UPDATE OF titulo, descripcion ON anuncios
@@ -46,8 +50,8 @@ ALTER TABLE anuncios
   ALTER COLUMN titulo_buscable SET NOT NULL,
   ALTER COLUMN descripcion_buscable SET NOT NULL;
 
-CREATE INDEX anuncios_titulo_buscable_idx ON anuncios (titulo_buscable);
-CREATE INDEX anuncios_descripcion_buscable_idx ON anuncios (descripcion_buscable);
+CREATE INDEX IF NOT EXISTS anuncios_titulo_buscable_idx ON anuncios (titulo_buscable);
+CREATE INDEX IF NOT EXISTS anuncios_descripcion_buscable_idx ON anuncios (descripcion_buscable);
 
 -- Comprobación: si esto no está a 0, el trigger no cubrió algún camino de
 -- escritura y las columnas quedarían desincronizadas.
