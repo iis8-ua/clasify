@@ -13,27 +13,67 @@ const { ErrorDeServicio } = require('../src/errors/ErrorDeServicio');
  */
 
 describe('categorías', () => {
-  test('se listan sin sesión y ordenadas por nombre', async () => {
-    const categorias = await categoriaService.listarCategorias();
+  test('se listan sin sesión, ordenadas por nombre y paginadas', async () => {
+    const { datos, paginacion } = await categoriaService.listarCategorias();
 
-    expect(categorias.length).toBeGreaterThan(0);
-    expect(categorias[0]).toHaveProperty('id');
-    expect(categorias[0]).toHaveProperty('nombre');
+    expect(datos.length).toBeGreaterThan(0);
+    expect(datos[0]).toHaveProperty('id');
+    expect(datos[0]).toHaveProperty('nombre');
 
-    const nombres = categorias.map((c) => c.nombre);
+    const nombres = datos.map((c) => c.nombre);
     expect(nombres).toEqual([...nombres].sort((a, b) => a.localeCompare(b, 'es')));
+
+    // El total no depende de la página, que es lo que hace que el bloque sirva.
+    expect(paginacion.total).toBe(8);
+    expect(paginacion.pagina).toBe(1);
+    expect(paginacion.limite).toBe(20);
   });
 
   test('devuelve las ocho categorías que mete la migración', async () => {
-    const categorias = await categoriaService.listarCategorias();
-    expect(categorias).toHaveLength(8);
+    const { datos, paginacion } = await categoriaService.listarCategorias();
+    expect(datos).toHaveLength(8);
+    expect(paginacion.total).toBe(8);
   });
 
   test('no expone ningún campo del email: la tabla de categorías no lo tiene', async () => {
-    const categorias = await categoriaService.listarCategorias();
-    for (const categoria of categorias) {
+    const { datos } = await categoriaService.listarCategorias();
+    for (const categoria of datos) {
       expect(Object.keys(categoria).sort()).toEqual(['id', 'nombre']);
     }
+  });
+
+  test('pagina de verdad, sin repetir ni saltarse categorías', async () => {
+    const primera = await categoriaService.listarCategorias({ limite: 3, pagina: 1 });
+    const segunda = await categoriaService.listarCategorias({ limite: 3, pagina: 2 });
+    const tercera = await categoriaService.listarCategorias({ limite: 3, pagina: 3 });
+
+    expect(primera.datos).toHaveLength(3);
+    expect(segunda.datos).toHaveLength(3);
+    expect(tercera.datos).toHaveLength(2);
+
+    const todos = [...primera.datos, ...segunda.datos, ...tercera.datos].map((c) => c.nombre);
+    expect(new Set(todos).size).toBe(8);
+
+    for (const pagina of [primera, segunda, tercera]) {
+      expect(pagina.paginacion).toMatchObject({ limite: 3, total: 8, paginas: 3 });
+    }
+  });
+
+  test('una página que no existe da la lista vacía, no un error', async () => {
+    const { datos, paginacion } = await categoriaService.listarCategorias({ pagina: 99 });
+
+    expect(datos).toEqual([]);
+    expect(paginacion.total).toBe(8);
+  });
+
+  test.each([
+    [{ pagina: 0 }, /página/],
+    [{ pagina: -1 }, /página/],
+    [{ pagina: 1.5 }, /página/],
+    [{ limite: 0 }, /límite/],
+    [{ limite: 101 }, /límite/]
+  ])('con %o devuelve 400 de la capa', async (opciones, esperado) => {
+    await expect(categoriaService.listarCategorias(opciones)).rejects.toThrow(esperado);
   });
 });
 
