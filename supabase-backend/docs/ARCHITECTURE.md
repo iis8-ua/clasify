@@ -183,8 +183,9 @@ Estas seis cosas se encontraron implementando y probando, y no están en el enun
 ## Pruebas
 
 - **Jest** sobre la capa de servicios, contra el proyecto Supabase de la nube. Script `npm test`.
-- 169 tests en 7 ficheros. `auth`, `anuncios` y `lecturaPublica` van contra el proyecto real;
-  `errores`, `listado` y `validacionAnuncio` son puros, sin red.
+- 169 tests en 7 ficheros. `auth`, `anuncios`, `lecturaPublica` y `paridadConBackendPropio` van
+  contra el proyecto real —este último registra usuarios de verdad para comparar las dos
+  implementaciones—; `errores`, `listado` y `validacionAnuncio` son puros, sin red.
 - Requisito para que funcione: el proveedor Email activado y "Confirm email" desactivado.
 - Los tests **no borran nada** al terminar, porque la clave publicable no puede tocar `auth.users`.
   Cada usuario tiene un email único y se reutiliza entre tests. Para vaciar el proyecto:
