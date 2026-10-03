@@ -85,8 +85,10 @@ columna. La RPC `mi_perfil_actual` es la única forma de leer el email propio, y
 - **Límite de registros.** El plan gratuito limita los registros de auth por hora (unos 30). La
   primera versión de los tests creaba un usuario por test y se comía el límite a mitad con
   `Request rate limit reached`. Se redujeron a cinco usuarios compartidos por fichero, cada uno con
-  un propósito (solo lectura, editable, con la sesión revocada y los dos de permisos cruzados). La
-  suite gasta unos nueve registros por ejecución, así que se pueden hacer tres o cuatro seguidas.
+  un propósito (solo lectura, editable, con la sesión revocada y los dos de permisos cruzados). Una
+  ejecución completa de la suite gasta once registros: cinco en este fichero, cuatro en
+  `anuncios.test.js` y uno en `paridadConBackendPropio.test.js`, más el del email duplicado. Dan para
+  dos o tres ejecuciones seguidas.
 - **Límite de correos.** Con "Confirm email" activado, cada registro envía un correo. En plan
   gratuito eso salta antes que el propio registro.
 

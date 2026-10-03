@@ -70,6 +70,7 @@ await anuncioService.crear(
 
 // Categorías, paginadas también (pocas filas, pero mismo formato que el resto).
 await categoriaService.listarCategorias();
+await categoriaService.listarCategorias({ pagina: 2, limite: 5 });
 
 // Los anuncios de una persona, que es lo que en el backend propio contestan
 // /usuarios/me/anuncios y /usuarios/:id/anuncios.
@@ -113,8 +114,11 @@ Dos cosas a tener en cuenta antes de ejecutarlas:
 - **Necesitan el proveedor Email activo y "Confirm email" desactivado.** Si no, fallan todas las de
   registro.
 - **No borran nada al terminar.** La clave publicable no tiene permiso para tocar `auth.users`, así
-  que los usuarios se acumulan. Cada ejecución registra unos nueve, y el plan gratuito limita los
-  registros por hora: se pueden hacer tres o cuatro seguidas. Para vaciar el proyecto:
+  que los usuarios se acumulan. Una ejecución completa registra **once**: los usuarios memorizados
+  de cada fichero de test (4 en `anuncios.test.js`, 5 en `auth.test.js` y 1 en
+  `paridadConBackendPropio.test.js`), porque la caché es por fichero y no global, más el que crea el
+  test de email duplicado. El plan gratuito limita los registros por hora, así que eso da para dos o
+  tres ejecuciones seguidas. Para vaciar el proyecto:
   `npm run db:limpiar -- --confirmar`.
 
 ## Qué tiene y qué no tiene frente al backend propio

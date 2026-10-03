@@ -126,7 +126,9 @@ Qué se revisó de lo que propuso la IA, porque varias cosas parecían bien y no
   comprobar es precisamente que RLS bloquea. Un doble en memoria no pondría a prueba nada de eso.
 - El límite de registros del plan gratuito, unas 30 por hora. La primera versión de la suite creaba un
   usuario por test y se comía el límite a mitad de ejecución. Ahora hay cinco usuarios compartidos por
-  fichero, cada uno con un papel, y la ejecución gasta unos nueve.
+  fichero, cada uno con un papel, y una ejecución completa gasta once registros: cinco en
+  `auth.test.js`, cuatro en `anuncios.test.js` y uno en `paridadConBackendPropio.test.js`, más el del
+  test de email duplicado.
 
 ## TEST_PLAN
 
