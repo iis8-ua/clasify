@@ -15,9 +15,12 @@ ligado a cada anuncio.
 - Perfil de usuario público y edición del perfil propio
 - Anuncios: alta, listado paginado con búsqueda, filtro y ordenación, detalle, edición, cambio de
   estado y borrado, con autorización por propietario
+- Listado de categorías paginado, con el mismo formato que el resto de listados
 - Subida de imágenes (`multipart/form-data`) servidas de forma estática
 - Favoritos sin duplicados (recurso secundario)
 - Mensajería privada comprador–vendedor mediante la entidad `Conversacion` (recurso secundario)
+- Valoraciones entre usuarios: puntuación del 1 al 5 y comentario opcional, con la media resumida en
+  el perfil público y junto al autor de cada anuncio (recurso secundario)
 - Códigos de error uniformes y validación de entradas en el backend
 
 ## Stack
@@ -39,9 +42,11 @@ parte de la lógica vive en la base de datos con RLS y no en código. La capa se
 iteración 7; su puesta en marcha está en `supabase-backend/README.md`.
 
 Lo que no está en el segundo backend son los recursos secundarios (favoritos, mensajería y
-valoraciones) y la subida de imágenes, porque el enunciado los deja fuera. Lo que sí se hizo es que
-las operaciones que quedan se comporten como las del backend propio, incluida la búsqueda sin
-distinción de acentos: `tests/paridadConBackendPropio.test.js` lo comprueba.
+valoraciones), porque el enunciado dice que no hacen falta. La subida de imágenes se decidió dejarla
+fuera al fijar el alcance de la iteración 7: en Supabase exigiría un bucket con sus propias políticas
+de acceso, y la imagen ya estaba resuelta en el backend propio. Lo que sí se hizo es que las
+operaciones que quedan se comporten como las del backend propio, incluida la búsqueda sin distinción
+de acentos: `tests/paridadConBackendPropio.test.js` lo comprueba.
 
 ## Requisitos
 
@@ -131,14 +136,22 @@ Para ver la cobertura: `npm test -- --coverage`.
 
 El proyecto se desarrolla con **SDD (Spec-Driven Development)**: cada iteración tiene una SPEC con
 sus requisitos y alcance, un PLAN de trabajo y un TEST_PLAN cuyos resultados se documentan. El
-historial de git refleja el proceso, con un commit de cierre por iteración y una rama
-`iteracion-NN-<nombre>` por iteración.
+historial de git refleja el proceso, con un commit de cierre por iteración y una rama por iteración
+(`iteracion-NN-<nombre>`; la I7 se llamó `supabase-iteracion-07` porque ese backend tiene proyecto
+aparte).
 
 ## Fuera de alcance
 
-Pagos reales, envío/logística, moderación automática de contenido y moderación de las
-valoraciones (reportar, ocultar o borrar una valoración). Las valoraciones entre usuarios **sí**
-entran en el alcance: puntuación del 1 al 5 y comentario opcional, con la media resumida en el
-perfil público y junto al autor de cada anuncio.
+- Pagos reales: si las dos partes quieren cerrar la venta, se quedan fuera de la aplicación.
+- Envío y logística.
+- Moderación automática de contenido.
+- Moderación de las valoraciones: reportarlas, ocultarlas o borrarlas.
+- Ponderar las valoraciones por antigüedad, es decir, que una cuenta valga lo mismo el primer día
+  que al año.
+- Lista negra de tokens JWT: el logout se hace descartando el token en el cliente, como cuenta la
+  primera línea de funcionalidades.
+
+La lista completa, con su origen en el enunciado, está en
+[`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md).
 
 ---
