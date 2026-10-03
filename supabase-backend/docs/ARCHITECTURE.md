@@ -190,5 +190,8 @@ Estas seis cosas se encontraron implementando y probando, y no están en el enun
 - Los tests **no borran nada** al terminar, porque la clave publicable no puede tocar `auth.users`.
   Cada usuario tiene un email único y se reutiliza entre tests. Para vaciar el proyecto:
   `npm run db:limpiar -- --confirmar`.
-- Cada ejecución registra unos nueve usuarios. Con el límite horario del plan gratuito se pueden
-  hacer tres o cuatro seguidas.
+- Cada ejecución completa registra once usuarios. No es un usuario por test, sino cinco usuarios
+  memorizados por cada fichero que los usa, porque la caché de `tests/ayudaSupabase.js` es por
+  fichero: 4 en `anuncios.test.js`, 5 en `auth.test.js` y 1 en `paridadConBackendPropio.test.js`, más
+  el registro del test de email duplicado. Con el límite horario del plan gratuito dan para dos o tres
+  ejecuciones seguidas.
